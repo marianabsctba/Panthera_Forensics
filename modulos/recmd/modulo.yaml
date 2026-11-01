@@ -1,0 +1,26 @@
+contrato: 1
+nome: recmd
+titulo: Leitura do Registro do Windows
+versao: "2026-10-29"
+reconhece:
+  - tipo: registro
+    magica_hex: "72656766"
+consome: [registro]
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/RECmd.zip
+    sha256: a3d60621d4be6719693cd509e2802ee59a8e89971e23cc74434a6f4242841dfc
+comando:
+  windows:
+    exec: RECmd/RECmd.exe
+    args: [-f, "{entrada}", --bn, "{ferramenta}/RECmd/BatchExamples/DFIRBatch.reb", --csv, "{saida}", --csvf, registro.csv]
+saida:
+  arquivos: "*registro*.csv"
+  formato: csv
+  mapas:
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{LastWriteTimestamp}"
+      fonte: "Registro: {Category}"
+      descricao: "{Description}: {ValueName} = {ValueData}"
+      origem_local: "{KeyPath}"

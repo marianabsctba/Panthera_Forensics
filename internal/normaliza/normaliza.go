@@ -4,17 +4,21 @@ package normaliza
 
 import (
 	"bufio"
+	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	_ "modernc.org/sqlite"
 
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
 )
@@ -43,6 +47,9 @@ var severidades = map[string]bool{"critica": true, "alta": true, "media": true, 
 
 // Ler percorre um arquivo de saida e entrega cada registro produzido.
 func Ler(s modulo.Saida, caminho string, entregar func(Registro) error) error {
+	if s.Formato == "sqlite" {
+		return lerSQLite(s, caminho, entregar)
+	}
 	f, err := os.Open(caminho)
 	if err != nil {
 		return err
@@ -104,6 +111,49 @@ func lerLinhas(r *bufio.Reader, tratar func([]byte) error) error {
 			return err
 		}
 	}
+}
+
+// lerSQLite entrega cada linha da tabela declarada. O nome da tabela vem do manifesto,
+// que ja foi validado, e nunca da saida da ferramenta.
+func lerSQLite(s modulo.Saida, caminho string, entregar func(Registro) error) error {
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(caminho)+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	linhas, err := db.Query(`SELECT * FROM "` + s.Tabela + `"`)
+	if err != nil {
+		return err
+	}
+	defer linhas.Close()
+	colunas, err := linhas.Columns()
+	if err != nil {
+		return err
+	}
+	valores := make([]any, len(colunas))
+	ponteiros := make([]any, len(colunas))
+	for i := range valores {
+		ponteiros[i] = &valores[i]
+	}
+	for linhas.Next() {
+		if err := linhas.Scan(ponteiros...); err != nil {
+			return err
+		}
+		linha := make(map[string]any, len(colunas))
+		for i, v := range valores {
+			switch t := v.(type) {
+			case nil:
+			case []byte:
+				linha[colunas[i]] = string(t)
+			default:
+				linha[colunas[i]] = t
+			}
+		}
+		if err := aplicar(s, linha, entregar); err != nil {
+			return err
+		}
+	}
+	return linhas.Err()
 }
 
 func lerCSV(s modulo.Saida, r io.Reader, entregar func(Registro) error) error {

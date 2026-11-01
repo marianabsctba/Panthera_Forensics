@@ -58,6 +58,22 @@ func TestInstalaComHashCerto(t *testing.T) {
 	}
 }
 
+func TestInstalaExecutavelUnico(t *testing.T) {
+	dados := []byte("nao e um zip")
+	soma := sha256.Sum256(dados)
+	dir := t.TempDir()
+	m := manifesto(servir(t, dados), hex.EncodeToString(soma[:]))
+	p := m.Instalar[runtime.GOOS+"-"+runtime.GOARCH]
+	p.Arquivo = "ferramenta.exe"
+	m.Instalar[runtime.GOOS+"-"+runtime.GOARCH] = p
+	if err := Instalar(context.Background(), m, dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "x", "1", "ferramenta.exe")); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRecusaHashErrado(t *testing.T) {
 	dir := t.TempDir()
 	m := manifesto(servir(t, pacote(t, "a.exe")), "00000000000000000000000000000000000000000000000000000000000000ff")

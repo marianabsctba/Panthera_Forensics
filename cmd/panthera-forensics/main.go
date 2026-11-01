@@ -12,6 +12,7 @@ import (
 	"runtime"
 
 	"github.com/marianabsctba/Panthera_Forensics/internal/caso"
+	"github.com/marianabsctba/Panthera_Forensics/internal/disco"
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
 	"github.com/marianabsctba/Panthera_Forensics/internal/motor"
 	"github.com/marianabsctba/Panthera_Forensics/internal/relatorio"
@@ -65,6 +66,15 @@ func executar(args []string) error {
 	}
 	ctx := context.Background()
 	switch args[0] {
+	case "auxiliar-disco":
+		f := flag.NewFlagSet("auxiliar-disco", flag.ExitOnError)
+		dirBin := f.String("bin", "", "pasta dos executaveis do The Sleuth Kit")
+		dirSaida := f.String("saida", "", "pasta de saida do modulo")
+		f.Parse(args[1:])
+		if f.NArg() != 1 || *dirBin == "" || *dirSaida == "" {
+			return fmt.Errorf("uso: auxiliar-disco -bin <pasta> -saida <pasta> <entrada>")
+		}
+		return disco.Executar(*dirBin, f.Arg(0), *dirSaida)
 	case "abrir":
 		f := flag.NewFlagSet("abrir", flag.ExitOnError)
 		porta := f.Int("porta", 7878, "porta local")

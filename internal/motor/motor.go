@@ -3,6 +3,7 @@
 package motor
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -30,7 +31,13 @@ type Motor struct {
 	Modulos        []*modulo.Manifesto
 	DirFerramentas string
 	TempoMaximo    time.Duration
+	// Nucleo e o executavel usado por modulos com exec "{nucleo}". Vazio usa o atual.
+	Nucleo string
 }
+
+// maximoRodadas limita a cadeia de derivados: uma evidencia que gera outra que gera
+// outra nao pode prender o processamento para sempre.
+const maximoRodadas = 5
 
 // Tarefa e um modulo com as evidencias que ele deve receber.
 type Tarefa struct {
@@ -135,11 +142,39 @@ func (m *Motor) Planejar(c *caso.Caso) ([]Tarefa, Resultado, error) {
 			tarefas = append(tarefas, Tarefa{Modulo: md, Entradas: unicas(entradas)})
 			continue
 		}
+		if md.Modo == "pasta" {
+			for _, e := range unicas(entradas) {
+				tarefas = append(tarefas, Tarefa{Modulo: md, Entradas: mesmaPasta(e, evidencias)})
+			}
+			continue
+		}
 		for _, e := range unicas(entradas) {
 			tarefas = append(tarefas, Tarefa{Modulo: md, Entradas: []caso.Evidencia{e}})
 		}
 	}
 	return tarefas, res, nil
+}
+
+// mesmaPasta junta um arquivo aos que vieram da mesma pasta de origem, para ferramentas
+// que leem um conjunto, como o perfil inteiro de um navegador. O arquivo vem primeiro.
+func mesmaPasta(e caso.Evidencia, todas []caso.Evidencia) []caso.Evidencia {
+	grupo := []caso.Evidencia{e}
+	nomes := map[string]bool{strings.ToLower(e.Nome): true}
+	for _, o := range todas {
+		if o.ID != e.ID && !nomes[strings.ToLower(o.Nome)] && pastaOrigem(o.Origem) == pastaOrigem(e.Origem) {
+			nomes[strings.ToLower(o.Nome)] = true
+			grupo = append(grupo, o)
+		}
+	}
+	return grupo
+}
+
+func pastaOrigem(origem string) string {
+	limpo := strings.ReplaceAll(origem, `\`, "/")
+	if i := strings.LastIndex(limpo, "/"); i >= 0 {
+		return strings.ToLower(limpo[:i])
+	}
+	return ""
 }
 
 // unicas tira duplicatas de conteudo: o mesmo arquivo so precisa ser lido uma vez.
@@ -158,36 +193,80 @@ func unicas(todas []caso.Evidencia) []caso.Evidencia {
 // Processar roda o plano inteiro em sequencia. Uma falha nao interrompe os outros
 // modulos: ela fica registrada no caso e na custodia.
 func (m *Motor) Processar(ctx context.Context, c *caso.Caso, avisar Progresso) (Resultado, error) {
-	tarefas, res, err := m.Planejar(c)
-	if err != nil {
-		return res, err
-	}
-	for _, titulo := range res.Ausentes {
-		if _, err := c.Custodia.Registrar("modulo.nao_executado", map[string]any{"modulo": titulo, "motivo": "não instalado neste sistema"}); err != nil {
+	var res Resultado
+	ausentes := map[string]bool{}
+	falhadas := map[string]bool{}
+	tratadas := map[string]bool{}
+	feitas := 0
+	// Cada rodada pode gerar novas evidencias, como os logs extraidos de uma imagem de
+	// disco, que precisam ser planejadas de novo.
+	for rodada := 0; rodada < maximoRodadas; rodada++ {
+		tarefas, plano, err := m.Planejar(c)
+		if err != nil {
 			return res, err
 		}
-	}
-	for i, t := range tarefas {
-		if err := ctx.Err(); err != nil {
-			return res, err
+		res.SemModulo = plano.SemModulo
+		for _, titulo := range plano.Ausentes {
+			if ausentes[titulo] {
+				continue
+			}
+			ausentes[titulo] = true
+			res.Ausentes = append(res.Ausentes, titulo)
+			if _, err := c.Custodia.Registrar("modulo.nao_executado", map[string]any{"modulo": titulo, "motivo": "não instalado neste sistema"}); err != nil {
+				return res, err
+			}
 		}
-		if avisar != nil {
-			avisar(t.Modulo.Titulo, i, len(tarefas))
+		executadas := 0
+		// So entra no plano da rodada o que ainda nao foi tratado nesta execucao.
+		var pendentes []Tarefa
+		for _, t := range tarefas {
+			if id := identificarTarefa(t); !falhadas[id] && !tratadas[id] {
+				pendentes = append(pendentes, t)
+			}
 		}
-		reutilizada, err := m.Executar(ctx, c, t)
-		switch {
-		case err != nil:
-			res.Falhas = append(res.Falhas, t.Modulo.Titulo+": "+err.Error())
-		case reutilizada:
-			res.Reutilizadas++
-		default:
-			res.Executadas++
+		total := feitas + len(pendentes)
+		for _, t := range pendentes {
+			if err := ctx.Err(); err != nil {
+				return res, err
+			}
+			id := identificarTarefa(t)
+			tratadas[id] = true
+			if avisar != nil {
+				avisar(t.Modulo.Titulo, feitas, total)
+			}
+			reutilizada, err := m.Executar(ctx, c, t)
+			switch {
+			case err != nil:
+				falhadas[id] = true
+				res.Falhas = append(res.Falhas, t.Modulo.Titulo+": "+err.Error())
+			case reutilizada:
+				// Nas rodadas seguintes, tarefa ja feita nao e reaproveitamento: e so a
+				// mesma tarefa aparecendo de novo no plano.
+				if rodada == 0 {
+					res.Reutilizadas++
+				}
+			default:
+				res.Executadas++
+				executadas++
+				feitas++
+			}
+		}
+		if executadas == 0 {
+			break
 		}
 	}
 	if avisar != nil {
-		avisar("", len(tarefas), len(tarefas))
+		avisar("", feitas, feitas)
 	}
 	return res, nil
+}
+
+func identificarTarefa(t Tarefa) string {
+	partes := []string{t.Modulo.Nome}
+	for _, e := range t.Entradas {
+		partes = append(partes, e.SHA256)
+	}
+	return strings.Join(partes, "|")
 }
 
 // localizar encontra o executavel declarado. O caminho e relativo a ferramenta
@@ -198,8 +277,24 @@ func (m *Motor) localizar(md *modulo.Manifesto) (ferramenta, error) {
 		return ferramenta{}, errors.New("modulo nao roda neste sistema")
 	}
 	dir := filepath.Join(m.DirFerramentas, md.Ferramenta, md.Versao)
-	if _, temPacote := md.PacoteAtual(); !temPacote && md.Dir != "" {
+	_, temPacote := md.PacoteAtual()
+	if !temPacote && md.Dir != "" {
 		dir = md.Dir
+	}
+	if cmd.Exec == "{nucleo}" {
+		if temPacote {
+			if _, err := os.Stat(filepath.Join(dir, ".instalado")); err != nil {
+				return ferramenta{}, fmt.Errorf("%s nao instalado", md.Ferramenta)
+			}
+		}
+		exe := m.Nucleo
+		if exe == "" {
+			var err error
+			if exe, err = os.Executable(); err != nil {
+				return ferramenta{}, err
+			}
+		}
+		return ferramenta{dir: dir, exec: exe}, nil
 	}
 	achados, err := filepath.Glob(filepath.Join(dir, filepath.FromSlash(cmd.Exec)))
 	if err != nil {
@@ -271,6 +366,11 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	if err := m.rodar(ctx, fer.exec, args, dirTrabalho, arquivoSaida, filepath.Join(dirExec, "stderr.log")); err != nil {
 		return false, m.falhar(c, id, md, err)
 	}
+	if md.Saida.Derivados != "" {
+		if err := guardarDerivados(c, filepath.Join(dirSaida, filepath.FromSlash(md.Saida.Derivados)), dirSaida, origens); err != nil {
+			return false, m.falhar(c, id, md, fmt.Errorf("ao guardar arquivos extraidos: %w", err))
+		}
+	}
 	n, err := importar(c, id, md, dirSaida, origens)
 	if err != nil {
 		return false, m.falhar(c, id, md, fmt.Errorf("ao ler a saida: %w", err))
@@ -337,9 +437,12 @@ func (m *Motor) rodar(ctx context.Context, executavel string, args []string, dir
 // para o arquivo do cofre, que e somente leitura.
 func prepararEntrada(c *caso.Caso, dir, modo string, entradas []caso.Evidencia) (string, *origens, error) {
 	var ultimo string
-	o := &origens{porCaminho: map[string]string{}}
+	o := &origens{porCaminho: map[string]string{}, evidencias: map[string]caso.Evidencia{}}
 	for i, e := range entradas {
 		sub := filepath.Join(dir, fmt.Sprint(i))
+		if modo == "pasta" {
+			sub = dir
+		}
 		if err := os.MkdirAll(sub, 0o755); err != nil {
 			return "", nil, err
 		}
@@ -349,20 +452,66 @@ func prepararEntrada(c *caso.Caso, dir, modo string, entradas []caso.Evidencia) 
 		}
 		o.unica = fmt.Sprintf("%s (evidência %d)", e.Nome, e.ID)
 		o.porCaminho[normalizarCaminho(ultimo)] = o.unica
+		o.evidencias[normalizarCaminho(ultimo)] = e
 	}
 	if len(entradas) != 1 {
 		o.unica = ""
 	}
-	if modo == "lote" {
+	if modo == "lote" || modo == "pasta" {
 		return dir, o, nil
 	}
 	return ultimo, o, nil
+}
+
+// guardarDerivados le o JSONL do modulo e preserva cada arquivo como nova evidencia,
+// ligada a evidencia de onde saiu.
+func guardarDerivados(c *caso.Caso, lista, dirSaida string, o *origens) error {
+	f, err := os.Open(lista)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	leitor := bufio.NewScanner(f)
+	leitor.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+	for leitor.Scan() {
+		var d struct{ Arquivo, Nome, Origem, Evidencia string }
+		if err := json.Unmarshal(leitor.Bytes(), &d); err != nil {
+			return err
+		}
+		relativo := filepath.FromSlash(d.Arquivo)
+		// Quem escreve a lista e um modulo: ele nao escolhe arquivo fora da propria saida.
+		if !filepath.IsLocal(relativo) {
+			return fmt.Errorf("caminho fora da saida: %s", d.Arquivo)
+		}
+		pai, ok := o.evidencias[normalizarCaminho(d.Evidencia)]
+		if !ok {
+			return fmt.Errorf("evidencia de origem desconhecida: %s", d.Evidencia)
+		}
+		if err := guardarDerivado(c, filepath.Join(dirSaida, relativo), d.Nome, pai.Nome+"!"+d.Origem, pai.ID); err != nil {
+			return err
+		}
+	}
+	return leitor.Err()
+}
+
+func guardarDerivado(c *caso.Caso, caminho, nome, origem string, pai int64) error {
+	f, err := os.Open(caminho)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = c.AdicionarDerivado(f, nome, origem, pai)
+	return err
 }
 
 // origens traduz o caminho de trabalho que a ferramenta viu para a evidencia real:
 // a pasta temporaria nao diz nada a quem le o achado ou o laudo.
 type origens struct {
 	porCaminho map[string]string
+	evidencias map[string]caso.Evidencia
 	unica      string
 }
 

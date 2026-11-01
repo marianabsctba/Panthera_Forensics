@@ -161,6 +161,20 @@ func TestNaoRepeteMesmaTarefa(t *testing.T) {
 	}
 }
 
+func TestMesmaPastaJuntaArquivosDaOrigem(t *testing.T) {
+	historico := caso.Evidencia{ID: 1, Nome: "History", Origem: `D:\perfil\Default\History`}
+	todas := []caso.Evidencia{
+		historico,
+		{ID: 2, Nome: "Cookies", Origem: `D:\perfil\Default\Cookies`},
+		{ID: 3, Nome: "Cookies", Origem: `D:\perfil\Default\Cookies`},
+		{ID: 4, Nome: "History", Origem: `D:\outro\History`},
+	}
+	grupo := mesmaPasta(historico, todas)
+	if len(grupo) != 2 || grupo[0].ID != 1 || grupo[1].ID != 2 {
+		t.Fatalf("grupo errado: %+v", grupo)
+	}
+}
+
 func TestFalhaFicaRegistradaESemDadosParciais(t *testing.T) {
 	m, c := montar(t)
 	adicionar(t, c, "ruim.bin", "FAKE QUEBRAR")

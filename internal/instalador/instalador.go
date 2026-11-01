@@ -66,7 +66,15 @@ func Instalar(ctx context.Context, m *modulo.Manifesto, dirFerramentas string) e
 	if err := os.RemoveAll(destino); err != nil {
 		return err
 	}
-	if err := extrair(tmp.Name(), destino); err != nil {
+	if p.Arquivo != "" {
+		// A ferramenta e um executavel unico, sem pacote para abrir.
+		if err := os.MkdirAll(destino, 0o755); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp.Name(), filepath.Join(destino, filepath.Base(p.Arquivo))); err != nil {
+			return err
+		}
+	} else if err := extrair(tmp.Name(), destino); err != nil {
 		os.RemoveAll(destino)
 		return err
 	}

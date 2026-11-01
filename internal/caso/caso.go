@@ -233,6 +233,11 @@ func (c *Caso) Adicionar(r io.Reader, nome, origem string) ([]Evidencia, error) 
 	return todas, nil
 }
 
+// AdicionarDerivado preserva um arquivo extraido de outra evidencia, ligado a ela.
+func (c *Caso) AdicionarDerivado(r io.Reader, nome, origem string, pai int64) (Evidencia, error) {
+	return c.guardar(r, nome, origem, &pai)
+}
+
 func (c *Caso) guardar(r io.Reader, nome, origem string, pai *int64) (Evidencia, error) {
 	cofre := filepath.Join(c.Dir, "evidencias")
 	tmp, err := os.CreateTemp(cofre, "entrada-*")

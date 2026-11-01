@@ -10,10 +10,13 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Contrato de módulos, plano automático, reaproveitamento | Pronto, com testes usando uma ferramenta de teste |
 | Interface local e relatório | Prontos, conferidos no navegador com dados de demonstração |
 | Instalador com hash fixado | Pronto, com testes |
+| Leitura de imagem de disco (The Sleuth Kit), `.dd` e `.E01` segmentado | Testada com dados de referência do NIST, ver [validação](validacao/README.md) |
+| Módulos MFTECmd e RECmd (Registro) | Testados com dados de referência do NIST |
+| Módulo Hindsight (Chrome e Firefox) | Testado com amostras do próprio projeto Hindsight |
 | Módulos Hayabusa, EvtxECmd e PECmd | Executados com amostras públicas reais, sem gabarito formal |
-| Módulo MFTECmd | Testado com dados de referência do NIST, ver [validação](validacao/README.md) |
 | Módulos de memória (Volatility) | **Não validados**: não listam processos nas imagens do NIST, de 2005 e 2006 |
-| Leitura direta de imagem de disco | Não feita |
+| Busca no conteúdo dos arquivos, recuperação de apagados | Não feitas |
+| YARA, capa, Chainsaw, tshark, Zeek, Suricata, Plaso, bulk_extractor | Não feitos |
 | Coletor para a máquina-alvo | Não feito |
 
 ## Antivírus

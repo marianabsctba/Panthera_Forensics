@@ -1,0 +1,34 @@
+contrato: 1
+nome: hindsight
+titulo: Histórico de navegadores
+versao: "2026.06"
+reconhece:
+  - tipo: perfil-navegador
+    nomes: [History, places.sqlite]
+consome: [perfil-navegador]
+modo: pasta
+instalar:
+  windows-amd64:
+    url: https://github.com/obsidianforensics/hindsight/releases/download/v2026.06/hindsight.exe
+    sha256: 69beaaec4f29ea36734ca9115e6c002fc43ed918d860794e1641d3ac9f129bd7
+    arquivo: hindsight.exe
+comando:
+  windows:
+    exec: hindsight.exe
+    # SQLite, e nao JSONL: na versao 2026.06, o JSONL perde visitas e downloads do
+    # Firefox, apesar de o total informado pela ferramenta estar certo.
+    args: [-i, "{entrada}", -o, "{saida}/navegador", -f, sqlite]
+saida:
+  arquivos: navegador.sqlite
+  formato: sqlite
+  tabela: timeline
+  mapas:
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{timestamp}"
+      fonte: "Navegador: {type}"
+      descricao: "{title} {url} {value} {interpretation}"
+      origem_local: "{source_item}"
+      entidades:
+        # So o endereco base, para ligar visitas a mesma pagina com parametros diferentes.
+        - {tipo: url, valor: "{url}", remover: '[?#].*$'}

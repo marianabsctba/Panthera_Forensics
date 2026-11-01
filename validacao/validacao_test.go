@@ -40,15 +40,17 @@ func ambiente(t *testing.T) (*motor.Motor, string) {
 }
 
 // processar leva a evidencia pelo fluxo real e exige que nenhuma leitura falhe.
-func processar(t *testing.T, m *motor.Motor, caminho string) *caso.Caso {
+func processar(t *testing.T, m *motor.Motor, caminhos ...string) *caso.Caso {
 	t.Helper()
 	c, err := caso.Criar(t.TempDir(), "Validacao "+t.Name(), "", "validacao")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { c.Fechar() })
-	if _, err := c.AdicionarCaminho(caminho); err != nil {
-		t.Fatal(err)
+	for _, caminho := range caminhos {
+		if _, err := c.AdicionarCaminho(caminho); err != nil {
+			t.Fatal(err)
+		}
 	}
 	res, err := m.Processar(context.Background(), c, nil)
 	if err != nil {

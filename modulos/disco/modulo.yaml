@@ -1,0 +1,23 @@
+contrato: 1
+nome: disco
+titulo: Leitura de imagem de disco
+versao: "4.15.0"
+ferramenta: sleuthkit
+reconhece:
+  - tipo: disco
+    magica_hex: "455646090d0aff00"
+    extensoes: [.dd, .e01, .001, .002, .003, .004, .005, .006, .007, .008, .009, .010, .011, .012]
+consome: [disco]
+modo: lote
+instalar:
+  windows-amd64:
+    url: https://github.com/sleuthkit/sleuthkit/releases/download/sleuthkit-4.15.0/sleuthkit-4.15.0-win32.zip
+    sha256: c2ebab8105b893d97bd8ce35b88e01985e2a106efc97f03adf95840a631b20ce
+comando:
+  windows:
+    exec: "{nucleo}"
+    args: [auxiliar-disco, -bin, "{ferramenta}/sleuthkit-4.15.0-win32/bin", -saida, "{saida}", "{entrada}"]
+saida:
+  arquivos: registros.jsonl
+  formato: contrato
+  derivados: derivados.jsonl

@@ -50,6 +50,8 @@ type Reconhecimento struct {
 type Pacote struct {
 	URL    string `yaml:"url"`
 	SHA256 string `yaml:"sha256"`
+	// Arquivo indica que o download e o proprio executavel, com este nome.
+	Arquivo string `yaml:"arquivo"`
 }
 
 // Comando e a linha de execucao, com marcadores como {entrada} e {saida}. Dir
@@ -64,8 +66,12 @@ type Comando struct {
 
 // Saida descreve como transformar o que a ferramenta escreve em registros.
 type Saida struct {
-	Arquivos    string            `yaml:"arquivos"`
-	Formato     string            `yaml:"formato"`
+	Arquivos string `yaml:"arquivos"`
+	Formato  string `yaml:"formato"`
+	// Derivados aponta para um JSONL com arquivos extraidos, que viram novas evidencias.
+	Derivados string `yaml:"derivados"`
+	// Tabela e a tabela lida quando o formato e sqlite.
+	Tabela      string            `yaml:"tabela"`
 	Severidades map[string]string `yaml:"severidades"`
 	Mapas       []Mapa            `yaml:"mapas"`
 }
@@ -99,6 +105,8 @@ type MapaEntidade struct {
 
 var nomeValido = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
+var tabelaValida = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
 // Interpretar le um manifesto e confere o contrato.
 func Interpretar(dados []byte) (*Manifesto, error) {
 	var m Manifesto
@@ -129,7 +137,7 @@ func (m *Manifesto) validar() error {
 	switch m.Modo {
 	case "":
 		m.Modo = "arquivo"
-	case "arquivo", "lote":
+	case "arquivo", "lote", "pasta":
 	default:
 		return fmt.Errorf("%s: modo %q desconhecido", m.Nome, m.Modo)
 	}
@@ -141,9 +149,12 @@ func (m *Manifesto) validar() error {
 	}
 	switch m.Saida.Formato {
 	case "contrato":
-	case "csv", "jsonl":
+	case "csv", "jsonl", "sqlite":
 		if len(m.Saida.Mapas) == 0 {
 			return fmt.Errorf("%s: formato %s exige mapas", m.Nome, m.Saida.Formato)
+		}
+		if m.Saida.Formato == "sqlite" && !tabelaValida.MatchString(m.Saida.Tabela) {
+			return fmt.Errorf("%s: tabela invalida: %q", m.Nome, m.Saida.Tabela)
 		}
 	default:
 		return fmt.Errorf("%s: formato de saida %q desconhecido", m.Nome, m.Saida.Formato)

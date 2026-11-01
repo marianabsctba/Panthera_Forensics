@@ -1,6 +1,7 @@
 package normaliza
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,6 +54,27 @@ func TestJSONLComCampoAninhadoESeveridade(t *testing.T) {
 	}
 	if r[0].Severidade != "critica" || r[0].Descricao != "Regra em PC1" {
 		t.Fatalf("mapeamento errado: %+v", r[0])
+	}
+}
+
+func TestSQLiteEntregaTodasAsLinhas(t *testing.T) {
+	caminho := filepath.Join(t.TempDir(), "saida.sqlite")
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(caminho))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`CREATE TABLE timeline(t TEXT, n TEXT, q INT);
+		INSERT INTO timeline VALUES('2026-03-01 10:00:00.000','a',1),(NULL,'b',NULL)`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	s := modulo.Saida{Formato: "sqlite", Tabela: "timeline", Mapas: []modulo.Mapa{{Tipo: "evento", Quando: "{t}", Descricao: "{n} {q}", ManterSemData: true}}}
+	var r []Registro
+	if err := Ler(s, caminho, func(x Registro) error { r = append(r, x); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(r) != 2 || r[0].Descricao != "a 1" || r[0].Quando == "" || r[1].Quando != "" {
+		t.Fatalf("linhas erradas: %+v", r)
 	}
 }
 
