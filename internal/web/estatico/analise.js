@@ -269,7 +269,7 @@ async function abaVisao(area, base, acoes) {
   const totalAlertas = Object.values(v.resumo.alertas || {}).reduce((s, n) => s + n, 0);
   frases.push(totalAlertas
     ? `${formatoNumero(totalAlertas)} alertas automáticos pedem conferência na evidência de origem.`
-    : "Nenhum alerta automático. Isso não significa que não há nada: explore a linha do tempo.");
+    : "Nenhum alerta automático. Isso não indica que o caso está limpo: as detecções cobrem logs .evtx, executáveis e tráfego de rede, e logs .evt de sistemas antigos ainda não são lidos.");
 
   const avisos = [];
   if (v.falhas) avisos.push(`${v.falhas} ${v.falhas === 1 ? "leitura não terminou" : "leituras não terminaram"}.`);

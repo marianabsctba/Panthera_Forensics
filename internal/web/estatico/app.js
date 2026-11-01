@@ -157,7 +157,7 @@ async function telaCaso(id) {
 
   const definicoes = [
     ["visao", "Visão geral", () => abaVisao(area, base, { abrirAba, abrirEntidade, buscar, abrirPeriodo })],
-    ["atencao", "O que merece atenção", () => abaRegistros(area, base, { tipo: "alerta", ordem: "gravidade" }, "Nenhum achado automático até agora. Isso não significa que não há nada: explore a linha do tempo.", true)],
+    ["atencao", "O que merece atenção", () => abaRegistros(area, base, { tipo: "alerta", ordem: "gravidade" }, "Nenhum achado automático. Isso não indica que o caso está limpo: as detecções cobrem logs .evtx, executáveis e tráfego de rede, e logs .evt de sistemas antigos ainda não são lidos.", true)],
     ["timeline", "Linha do tempo", () => abaRegistros(area, base, {}, "A linha do tempo aparece depois que uma evidência é lida.")],
     ["conexoes", "Conexões", () => abaConexoes(area, base, abrirEntidade)],
     ["entidades", "Pessoas e objetos", () => abaEntidades(area, base, abrirEntidade)],

@@ -780,10 +780,15 @@ func importar(c *caso.Caso, execucao int64, md *modulo.Manifesto, dirSaida strin
 	var n int64
 	for _, arquivo := range arquivos {
 		err := normaliza.Ler(md.Saida, arquivo, func(r normaliza.Registro) error {
-			dados, err := json.Marshal(r.Dados)
-			if err != nil {
+			// Sem escapar & e <: o texto precisa continuar igual ao da evidencia, inclusive para
+			// achar um arquivo pelo caminho.
+			var buffer bytes.Buffer
+			codificador := json.NewEncoder(&buffer)
+			codificador.SetEscapeHTML(false)
+			if err := codificador.Encode(r.Dados); err != nil {
 				return err
 			}
+			dados := bytes.TrimSpace(buffer.Bytes())
 			var quando any
 			if r.Quando != "" {
 				quando = r.Quando

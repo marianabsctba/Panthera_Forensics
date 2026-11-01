@@ -46,13 +46,16 @@ saida:
       fonte: "Exame profundo: nomes residuais"
       descricao: "Nome residual ou arquivo vazio, não confirma exclusão: {Path}"
       origem_local: "{TrackId}"
+    # Esta marca nao separa entrada reaproveitada: no Hacking Case do NIST, 92 de 94 itens
+    # com conteudo estavam realocados segundo o The Sleuth Kit, entao tamanho e hash podem
+    # ser de outro arquivo. A leitura de disco e que distingue os dois casos.
     - tipo: evento
       se: {Deleted: "true"}
       se_nao: {Size: "0"}
       manter_sem_data: true
       quando: "{Modified}"
       fonte: "Exame profundo: apagados"
-      descricao: "Arquivo apagado, data da última alteração: {Path}"
+      descricao: "Marcado como apagado; confira se a entrada não foi reaproveitada por outro arquivo: {Path}"
       origem_local: "{TrackId}"
     - tipo: evento
       se: {Carved: "true"}

@@ -242,6 +242,41 @@ func TestModuloOpcionalSoRodaNoExameProfundo(t *testing.T) {
 	}
 }
 
+func TestDadosMantemTextoOriginal(t *testing.T) {
+	m, c := montar(t)
+	m.Modulos[0].Saida.Formato = "contrato"
+	m.Modulos[0].Saida.Mapas = nil
+	dir := t.TempDir()
+	saida := filepath.Join(dir, "resultado.csv")
+	if err := os.WriteFile(saida, []byte(`{"tipo":"evento","descricao":"x","dados":{"caminho":"/a&b<c>.txt"}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importar(c, 1, m.Modulos[0], dir, &origens{porCaminho: map[string]string{}}); err == nil {
+		// A execucao 1 nao existe: se o banco aceitar, o texto ainda pode ser conferido.
+		var d string
+		if err := c.DB.QueryRow(`SELECT dados FROM registros LIMIT 1`).Scan(&d); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(d, "/a&b<c>.txt") {
+			t.Fatalf("texto escapado: %s", d)
+		}
+		return
+	}
+	if _, err := c.DB.Exec(`INSERT INTO execucoes(id,chave,modulo,titulo,versao,estado,inicio) VALUES(1,1,1,1,1,1,1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := importar(c, 1, m.Modulos[0], dir, &origens{porCaminho: map[string]string{}}); err != nil {
+		t.Fatal(err)
+	}
+	var d string
+	if err := c.DB.QueryRow(`SELECT dados FROM registros LIMIT 1`).Scan(&d); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(d, "/a&b<c>.txt") {
+		t.Fatalf("texto escapado: %s", d)
+	}
+}
+
 func TestAgruparSegmentosDeImagem(t *testing.T) {
 	grupos := agruparSegmentos([]caso.Evidencia{
 		{ID: 1, Nome: "disco.E02"}, {ID: 2, Nome: "disco.E01"}, {ID: 3, Nome: "outro.dd"},
