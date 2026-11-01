@@ -293,22 +293,31 @@ async function abaVisao(area, base, acoes) {
   const profundo = el("div");
   api(`${base}/aprofundar`).then((p) => {
     if (!p.aplicavel) return;
-    const situacao = el("div", { class: "suave pequeno" });
-    profundo.replaceChildren(el("div", { class: "painel exame" },
+    const iniciar = (rota, texto) => el("button", {
+      onclick: async (e) => {
+        e.target.disabled = true;
+        e.target.textContent = "Em andamento";
+        await api(`${base}/processar?${rota}=1`, { method: "POST" });
+        window.acompanharCaso?.();
+      },
+    }, texto);
+    const paineis = [el("div", { class: "painel exame" },
       el("div", {},
         el("h2", {}, "Exame profundo"),
         el("div", { class: "suave pequeno" }, p.pronto
           ? "Feito. A busca do topo agora também procura dentro de documentos, e-mails e mensagens."
-          : "Lê o conteúdo de documentos, e-mails e mensagens, recupera arquivos e monta a linha do tempo completa. Pode levar bastante tempo e ocupar vários GB."),
-        situacao),
-      !p.pronto && el("button", {
-          onclick: async (e) => {
-            e.target.disabled = true;
-            e.target.textContent = "Em andamento";
-            await api(`${base}/processar?profundo=1`, { method: "POST" });
-            window.acompanharCaso?.();
-          },
-        }, "Iniciar exame profundo")));
+          : "Lê o conteúdo de documentos, e-mails e mensagens e o histórico do Internet Explorer. Pode levar bastante tempo e ocupar vários GB.")),
+      !p.pronto && iniciar("profundo", "Iniciar exame profundo"))];
+    if (p.completa_aplicavel) {
+      paineis.push(el("div", { class: "painel exame" },
+        el("div", {},
+          el("h2", {}, "Linha do tempo completa"),
+          el("div", { class: "suave pequeno" }, p.completa_pronta
+            ? "Feita. Os eventos dela já estão na linha do tempo."
+            : "Reúne centenas de tipos de vestígio em uma só linha do tempo. Em um disco grande, pode levar horas e usar muita memória, e não é necessária para a maior parte dos exames.")),
+        !p.completa_pronta && iniciar("completa", "Iniciar linha do tempo completa")));
+    }
+    profundo.replaceChildren(...paineis);
   }).catch(() => {});
 
   area.replaceChildren(

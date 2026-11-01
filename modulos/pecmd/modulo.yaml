@@ -15,13 +15,55 @@ comando:
     exec: PECmd.exe
     args: [-f, "{entrada}", --csv, "{saida}", --csvf, prefetch.csv]
 saida:
-  arquivos: "*_Timeline.csv"
+  # O arquivo principal, e nao o _Timeline: so ele traz o caminho e a contagem de execucoes.
+  arquivos: prefetch.csv
   formato: csv
   mapas:
     - tipo: evento
-      quando: "{RunTime}"
+      quando: "{LastRun}"
       fonte: Prefetch
-      descricao: "Programa executado: {ExecutableName}"
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
       entidades:
-        # So o nome do arquivo, para ligar com a mesma identidade vinda de outras fontes.
-        - {tipo: arquivo, valor: "{ExecutableName}", remover: '^.*\\'}
+        - {tipo: arquivo, valor: "{ExecutableName}"}
+    - tipo: evento
+      quando: "{PreviousRun0}"
+      fonte: Prefetch
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}
+    - tipo: evento
+      quando: "{PreviousRun1}"
+      fonte: Prefetch
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}
+    - tipo: evento
+      quando: "{PreviousRun2}"
+      fonte: Prefetch
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}
+    - tipo: evento
+      quando: "{PreviousRun3}"
+      fonte: Prefetch
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}
+    - tipo: evento
+      quando: "{PreviousRun4}"
+      fonte: Prefetch
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}
+    - tipo: evento
+      quando: "{PreviousRun5}"
+      fonte: Prefetch
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}
+    - tipo: evento
+      quando: "{PreviousRun6}"
+      fonte: Prefetch
+      descricao: "Programa executado: {FullPath} ({RunCount} execuções no total)"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}

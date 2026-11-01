@@ -115,7 +115,7 @@ func executar(args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("uso: aprofundar <pasta do caso>")
 		}
-		if err := web.InstalarOpcionais(ctx, m.Modulos, m.DirFerramentas); err != nil {
+		if err := web.InstalarOpcionais(ctx, m.Modulos, m.DirFerramentas, false); err != nil {
 			return err
 		}
 		c, err := caso.Abrir(args[1])
@@ -124,6 +124,31 @@ func executar(args []string) error {
 		}
 		defer c.Fechar()
 		res, err := m.Variante(false, true).Processar(ctx, c, func(etapa string, feitas, total int) {
+			if etapa != "" {
+				fmt.Printf("[%d/%d] %s\n", feitas+1, total, etapa)
+			}
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("executadas=%d reutilizadas=%d falhas=%d ausentes=%d sem_leitura=%d\n", res.Executadas, res.Reutilizadas, len(res.Falhas), len(res.Ausentes), res.SemModulo)
+		for _, falha := range res.Falhas {
+			fmt.Println("falha:", falha)
+		}
+		return nil
+	case "linha-completa":
+		if len(args) != 2 {
+			return fmt.Errorf("uso: linha-completa <pasta do caso>")
+		}
+		if err := web.InstalarOpcionais(ctx, m.Modulos, m.DirFerramentas, true); err != nil {
+			return err
+		}
+		c, err := caso.Abrir(args[1])
+		if err != nil {
+			return err
+		}
+		defer c.Fechar()
+		res, err := m.Completa().Processar(ctx, c, func(etapa string, feitas, total int) {
 			if etapa != "" {
 				fmt.Printf("[%d/%d] %s\n", feitas+1, total, etapa)
 			}

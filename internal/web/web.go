@@ -413,6 +413,7 @@ func (s *Servidor) enviarEvidencia(w http.ResponseWriter, r *http.Request, c *ca
 func (s *Servidor) processar(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
 	refazer := r.URL.Query().Get("refazer") == "1"
 	profundo := r.URL.Query().Get("profundo") == "1"
+	completa := r.URL.Query().Get("completa") == "1"
 	id := c.Info.ID
 	s.mu.Lock()
 	e, ok := s.estados[id]
@@ -429,20 +430,23 @@ func (s *Servidor) processar(w http.ResponseWriter, r *http.Request, c *caso.Cas
 	}
 	e.Rodando, e.Erro, e.Resultado = true, "", nil
 	s.mu.Unlock()
-	go s.rodar(c, e, refazer, profundo)
+	go s.rodar(c, e, refazer, profundo, completa)
 	responder(w, map[string]bool{"iniciado": true})
 }
 
-func (s *Servidor) rodar(c *caso.Caso, e *Estado, refazer, profundo bool) {
+func (s *Servidor) rodar(c *caso.Caso, e *Estado, refazer, profundo, completa bool) {
 	m := s.Motor
 	if refazer || profundo {
 		m = s.Motor.Variante(refazer, profundo)
 	}
-	if profundo {
+	if completa {
+		m = s.Motor.Completa()
+	}
+	if profundo || completa {
 		s.mu.Lock()
 		e.Etapa, e.Feitas, e.Total = "Preparando o exame profundo", 0, 1
 		s.mu.Unlock()
-		if err := InstalarOpcionais(context.Background(), s.Motor.Modulos, s.Motor.DirFerramentas); err != nil {
+		if err := InstalarOpcionais(context.Background(), s.Motor.Modulos, s.Motor.DirFerramentas, completa); err != nil {
 			s.mu.Lock()
 			e.Erro, e.Rodando = "Não foi possível preparar o exame profundo: "+err.Error(), false
 			s.mu.Unlock()
@@ -573,11 +577,11 @@ func InstalarTodos(ctx context.Context, lista []*modulo.Manifesto, dir string) e
 }
 
 // InstalarOpcionais prepara o que so o exame profundo usa.
-func InstalarOpcionais(ctx context.Context, lista []*modulo.Manifesto, dir string) error {
+func InstalarOpcionais(ctx context.Context, lista []*modulo.Manifesto, dir string, demorados bool) error {
 	var erros []error
 	precisaWSL := false
 	for _, m := range lista {
-		if !m.Opcional {
+		if !m.Opcional || (m.Demorado && !demorados) {
 			continue
 		}
 		precisaWSL = precisaWSL || m.RequerWSL
@@ -604,13 +608,27 @@ func (s *Servidor) aprofundar(w http.ResponseWriter, _ *http.Request, c *caso.Ca
 	for _, e := range evidencias {
 		tipos[e.Tipo] = true
 	}
-	aplicavel := false
+	aplicavel, demorado := false, false
 	for _, m := range s.Motor.Modulos {
-		if m.Opcional {
-			aplicavel = aplicavel || slices.ContainsFunc(m.Consome, func(t string) bool { return tipos[t] })
+		if !m.Opcional {
+			continue
+		}
+		seAplica := slices.ContainsFunc(m.Consome, func(t string) bool { return tipos[t] })
+		if m.Demorado {
+			demorado = demorado || seAplica
+		} else {
+			aplicavel = aplicavel || seAplica
 		}
 	}
-	responder(w, map[string]bool{"aplicavel": aplicavel, "pronto": s.Motor.ExameFeito(c)})
+	completa := false
+	if execucoes, err := c.Execucoes(); err == nil {
+		for _, x := range execucoes {
+			for _, m := range s.Motor.Modulos {
+				completa = completa || (m.Demorado && m.Nome == x.Modulo && x.Estado == "concluida")
+			}
+		}
+	}
+	responder(w, map[string]bool{"aplicavel": aplicavel, "pronto": s.Motor.ExameFeito(c), "completa_aplicavel": demorado, "completa_pronta": completa})
 }
 
 // buscaConteudo procura no indice do exame profundo. Sem exame feito, nao e erro: so nao

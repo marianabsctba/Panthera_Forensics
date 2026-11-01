@@ -243,6 +243,42 @@ func TestModuloOpcionalSoRodaNoExameProfundo(t *testing.T) {
 	}
 }
 
+func TestModuloDemoradoSoRodaNaLinhaCompleta(t *testing.T) {
+	m, c := montar(t)
+	m.Modulos[0].Opcional, m.Modulos[0].Demorado = true, true
+	adicionar(t, c, "a.bin", "FAKE a")
+	for _, caso := range []struct {
+		motor    *Motor
+		esperado int
+	}{{m, 0}, {m.Variante(false, true), 0}, {m.Completa(), 1}} {
+		tarefas, _, err := caso.motor.Planejar(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(tarefas) != caso.esperado {
+			t.Fatalf("esperava %d tarefas, veio %d", caso.esperado, len(tarefas))
+		}
+	}
+}
+
+func TestReconhecePrefixoDoNome(t *testing.T) {
+	m, _ := montar(t)
+	m.Modulos[0].Reconhece = []modulo.Reconhecimento{{Tipo: "lixeira", Prefixos: []string{"$I"}}}
+	caminho := filepath.Join(t.TempDir(), "x")
+	if err := os.WriteFile(caminho, []byte("dados"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for nome, esperado := range map[string]string{"$IABC123.jpg": "lixeira", "$i9.exe": "lixeira", "I.txt": ""} {
+		tipo, err := m.Identificar(caminho, nome)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tipo != esperado {
+			t.Fatalf("%s: tipo %q", nome, tipo)
+		}
+	}
+}
+
 func TestDadosMantemTextoOriginal(t *testing.T) {
 	m, c := montar(t)
 	m.Modulos[0].Saida.Formato = "contrato"

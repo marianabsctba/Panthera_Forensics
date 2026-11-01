@@ -39,6 +39,9 @@ type Manifesto struct {
 	RequerWSL bool `yaml:"requer_wsl"`
 	// Opcional deixa o modulo fora da analise padrao: so roda no exame profundo.
 	Opcional bool `yaml:"opcional"`
+	// Demorado deixa o modulo fora ate do exame profundo, porque pode levar horas: so roda
+	// quando a linha do tempo completa e pedida.
+	Demorado bool `yaml:"demorado"`
 	// Consulta busca no indice que a ferramenta deixou na saida, sem abrir sua interface.
 	Consulta *Comando `yaml:"consulta"`
 
@@ -53,6 +56,8 @@ type Reconhecimento struct {
 	Deslocamento int64    `yaml:"deslocamento"`
 	Extensoes    []string `yaml:"extensoes"`
 	Nomes        []string `yaml:"nomes"`
+	// Prefixos reconhece familias de nomes, como os $I123.jpg da lixeira do Windows.
+	Prefixos []string `yaml:"prefixos"`
 }
 
 // Pacote aponta para o que deve ser baixado e o hash que ele precisa ter.
@@ -83,6 +88,9 @@ type Comando struct {
 	// Versao sao os argumentos que imprimem a versao real, registrada na custodia. Serve
 	// para ferramentas sem hash fixado, como as instaladas por um gerenciador de pacotes.
 	Versao []string `yaml:"versao"`
+	// Depois roda em seguida, para tirar da saida da ferramenta o que ela nao exporta sozinha.
+	// Uma falha aqui nao perde o resultado principal: a execucao fica marcada como parcial.
+	Depois *Comando `yaml:"depois"`
 }
 
 // Saida descreve como transformar o que a ferramenta escreve em registros.
@@ -110,6 +118,8 @@ type Saida struct {
 	Faixas      map[string]float64 `yaml:"faixas"`
 	Severidades map[string]string  `yaml:"severidades"`
 	Mapas       []Mapa             `yaml:"mapas"`
+	// Adicionais sao outros arquivos da mesma saida, cada um com o proprio formato e mapas.
+	Adicionais []Saida `yaml:"adicionais"`
 }
 
 // Mapa gera um registro por linha de saida. Um mesmo arquivo pode ter varios,
@@ -121,6 +131,10 @@ type Mapa struct {
 	Se map[string]string `yaml:"se"`
 	// SeNao descarta as linhas em que estas colunas tem estes valores.
 	SeNao map[string]string `yaml:"se_nao"`
+	// SeRegex e SeNaoRegex fazem o mesmo por expressao regular, para colunas com varios
+	// valores juntos, como os motivos de uma linha do diario do NTFS.
+	SeRegex    map[string]string `yaml:"se_regex"`
+	SeNaoRegex map[string]string `yaml:"se_nao_regex"`
 	// ManterSemData preserva a linha mesmo sem data: um processo sem hora de inicio
 	// ainda e um achado, ao contrario de uma das quatro datas vazias da MFT.
 	ManterSemData bool           `yaml:"manter_sem_data"`
@@ -175,6 +189,15 @@ func (m *Manifesto) validar() error {
 	}
 	if len(m.Consome) == 0 {
 		return fmt.Errorf("%s: consome esta vazio", m.Nome)
+	}
+	for _, mapa := range m.Saida.Mapas {
+		for _, grupo := range []map[string]string{mapa.SeRegex, mapa.SeNaoRegex} {
+			for campo, expressao := range grupo {
+				if _, err := regexp.Compile(expressao); err != nil {
+					return fmt.Errorf("%s: regex de %s invalida: %w", m.Nome, campo, err)
+				}
+			}
+		}
 	}
 	switch m.Modo {
 	case "":

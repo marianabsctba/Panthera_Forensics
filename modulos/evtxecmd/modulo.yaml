@@ -28,3 +28,12 @@ saida:
       entidades:
         - {tipo: host, valor: "{Computer}"}
         - {tipo: usuario, valor: "{UserName}", remover: '( \(S-1-[^)]*\)$)|(^-$)'}
+    # O evento sai como "133" e nada mais, mas e o rastro da gravacao de um CD ou DVD.
+    - tipo: evento
+      se: {EventId: "133"}
+      se_regex: {Payload: CdRom}
+      quando: "{TimeCreated}"
+      fonte: Gravação de disco óptico
+      descricao: "Leitor de CD ou DVD registrou uma gravação (evento 133)"
+      origem_arquivo: "{SourceFile}"
+      origem_local: "{EventRecordId}"

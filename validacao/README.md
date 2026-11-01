@@ -13,6 +13,8 @@ PANTHERA_HOME=<pasta com ferramentas> PANTHERA_DADOS=<pasta de dados> go test -t
 | DFR-01 NTFS, da imagem e da `$MFT` | Arquivo apagado, tamanho, datas e arquivos ativos | Passa |
 | DFR-16 NTFS, da imagem e da `$MFT` | Todos os nomes de arquivo ativos do gabarito aparecem | Passa |
 | Hacking Case | 31 perguntas, detalhadas abaixo | Passa em 29; Q30 diverge; Q31 não testada |
+| Data Leakage, às cegas | [60 perguntas](data-leakage-nota.md), 57 avaliadas | 20 certas sozinho, 28 com trabalho manual |
+| Data Leakage, depois de corrigir | Mesmas perguntas, sem valor de teste às cegas | 49 conferem; 5 parciais; 3 sem resposta |
 | DFR-01 NTFS no exame profundo (IPED) | Arquivo apagado, tamanho, data e arquivos ativos | Passa |
 | Navegadores (amostras do Hindsight) | Chrome com 63 itens, Firefox com 6, sem perda | Passa |
 | Rede (amostra do projeto Suricata) | Regra 2100498 esperada, fuso convertido, conexão registrada | Passa |
@@ -27,7 +29,7 @@ PANTHERA_HOME=<pasta com ferramentas> PANTHERA_DADOS=<pasta de dados> go test -t
 - **Diverge:** na Q30, o gabarito diz 3 arquivos apagados, o The Sleuth Kit lista 70 entradas apagadas com metadados e o IPED marca 365 itens. Dos 365 do IPED, 271 têm tamanho zero, como os nomes que sobram em diretórios, e 94 têm conteúdo, quase todos temporários `.new` da pasta do Windows. Segundo o The Sleuth Kit, neste disco há 70 apagados, 92 entradas realocadas e 203 nomes residuais, e 92 dos 94 itens com conteúdo do IPED são realocados. Parte da diferença é o que cada ferramenta chama de apagado, mas isso não explica o 3 do gabarito, e nenhum número foi ajustado.
 - **Não testada:** Q31, que depende de um módulo antivírus. As assinaturas públicas usadas aqui não acusam nada neste disco, embora o Windows Defender tenha detectado malware em arquivos recuperados dele.
 - **Alcance:** as buscas confirmam que a informação existe no caso e que a tela a encontra. Como o teste já sabe o que procurar, isso não demonstra que um exame sem o gabarito chegaria a ela.
-- **Sem valor de prova às cegas:** este gabarito foi visto durante a calibração. A nota que vale como teste independente precisa vir de um caso não usado para calibrar, como o Data Leakage do NIST, ainda não executado.
+- **Sem valor de prova às cegas:** este gabarito foi visto durante a calibração. A nota que vale como teste independente precisa vir de um caso não usado para calibrar, como foi o Data Leakage do NIST na primeira rodada.
 - **Calibração:** as regras próprias de uso duplo foram ajustadas vendo este caso. Não houve alarme falso em nenhum `.exe` ou `.dll` da pasta `System32` desta máquina (sem subpastas), mas a taxa de acerto em casos desconhecidos não foi medida.
 
 ### Memória

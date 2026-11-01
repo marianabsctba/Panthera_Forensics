@@ -1,0 +1,30 @@
+contrato: 1
+nome: rbcmd
+titulo: Leitura da lixeira
+versao: "2026-11-01"
+reconhece:
+  - tipo: lixeira
+    prefixos: [$I]
+    nomes: [INFO2]
+consome: [lixeira]
+modo: lote
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/RBCmd.zip
+    sha256: 034f44c561bb4d3c7bc0f1f77ed0c1ebb08359fa90d003ac5ae00aaa52c85202
+comando:
+  windows:
+    exec: RBCmd.exe
+    args: [-d, "{entrada}", --csv, "{saida}", --csvf, lixeira.csv, -q]
+saida:
+  arquivos: lixeira.csv
+  formato: csv
+  mapas:
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{DeletedOn}"
+      fonte: Lixeira
+      descricao: "Enviado para a lixeira: {FileName} ({FileSize} bytes)"
+      origem_arquivo: "{SourceName}"
+      entidades:
+        - {tipo: arquivo, valor: "{FileName}", remover: '^.*\\'}

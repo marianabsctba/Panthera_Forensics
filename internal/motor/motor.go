@@ -40,8 +40,17 @@ type Motor struct {
 	RefazerFalhas bool
 	// Profundo inclui os modulos opcionais, mais pesados, na analise.
 	Profundo bool
+	// Completo inclui tambem os modulos que podem levar horas.
+	Completo bool
 
 	verificados sync.Map
+}
+
+// Completa cria um motor que tambem roda os modulos demorados.
+func (m *Motor) Completa() *Motor {
+	v := m.Variante(false, true)
+	v.Completo = true
+	return v
 }
 
 // Variante cria um motor so para um pedido, sem mudar o que os outros casos usam.
@@ -110,6 +119,11 @@ func (m *Motor) Identificar(caminho, nome string) (string, error) {
 					return r.Tipo, nil
 				}
 			}
+			for _, p := range r.Prefixos {
+				if len(nome) >= len(p) && strings.EqualFold(nome[:len(p)], p) {
+					return r.Tipo, nil
+				}
+			}
 		}
 	}
 	return "", nil
@@ -150,7 +164,7 @@ func (m *Motor) Planejar(c *caso.Caso) ([]Tarefa, Resultado, error) {
 	}
 	var tarefas []Tarefa
 	for _, md := range m.Modulos {
-		if md.Opcional && !m.Profundo {
+		if (md.Opcional && !m.Profundo) || (md.Demorado && !m.Completo) {
 			continue
 		}
 		var entradas []caso.Evidencia
@@ -535,7 +549,7 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 		return false, m.falhar(c, id, md, err)
 	}
 	args := expandirArgs(comando.Args, map[string]string{
-		"{entrada}": entrada, "{saida}": dirSaida, "{ferramenta}": fer.dir,
+		"{entrada}": entrada, "{entrada_pasta}": filepath.Dir(entrada), "{saida}": dirSaida, "{ferramenta}": fer.dir,
 		"{regras}": dirRegras, "{regras_wsl}": caminhoWSL(dirRegras),
 		"{entrada_wsl}": caminhoWSL(entrada), "{saida_wsl}": caminhoWSL(dirSaida), "{ferramenta_wsl}": caminhoWSL(fer.dir),
 	})
@@ -560,6 +574,19 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 		}
 		parcial = "leitura parcial: " + ultimaLinha(filepath.Join(dirExec, "stderr.log"))
 	}
+	if comando.Depois != nil {
+		depois := comando.Depois
+		argsDepois := expandirArgs(depois.Args, map[string]string{
+			"{entrada}": entrada, "{saida}": dirSaida, "{ferramenta}": fer.dir, "{regras}": dirRegras,
+		})
+		executavel := filepath.Join(fer.dir, filepath.FromSlash(depois.Exec))
+		if err := m.rodar(ctx, executavel, argsDepois, dirTrabalho, filepath.Join(dirExec, "depois.log"), filepath.Join(dirExec, "depois-erros.log")); err != nil {
+			if ctx.Err() != nil {
+				return false, m.falhar(c, id, md, err)
+			}
+			parcial = strings.TrimSpace(parcial + " etapa complementar: " + ultimaLinha(filepath.Join(dirExec, "depois-erros.log")))
+		}
+	}
 	for _, padrao := range md.Saida.Derivar {
 		achados, err := filepath.Glob(filepath.Join(dirSaida, filepath.FromSlash(padrao)))
 		if err != nil {
@@ -580,6 +607,15 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	n, err := importar(c, id, md, dirSaida, origens)
 	if err != nil {
 		return false, m.falhar(c, id, md, fmt.Errorf("ao ler a saida: %w", err))
+	}
+	for _, adicional := range md.Saida.Adicionais {
+		copia := *md
+		copia.Saida = adicional
+		mais, err := importar(c, id, &copia, dirSaida, origens)
+		if err != nil {
+			return false, m.falhar(c, id, md, fmt.Errorf("ao ler a saida: %w", err))
+		}
+		n += mais
 	}
 	fim := time.Now().UTC().Format(time.RFC3339)
 	if _, err := c.DB.Exec(`UPDATE execucoes SET estado='concluida',fim=?,registros=?,erro=? WHERE id=?`, fim, n, parcial, id); err != nil {

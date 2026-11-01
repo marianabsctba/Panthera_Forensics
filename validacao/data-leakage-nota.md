@@ -101,3 +101,39 @@ neste caso.
 - Na pergunta 30, a tabela troca as datas de modificação dos dois arquivos. O próprio log citado nas considerações e a pergunta 49 confirmam: `happy_holiday.jpg` é de 2015-01-29 e `do_u_wanna_build_a_snow_man.mp3` é de 2015-01-30, como respondi.
 - Na pergunta 33, o texto cita o evento 113, mas nas mesmas horas o log tem o evento 133 do leitor `CdRom0`.
 - Na pergunta 19, a resposta diz `Microsoft\Office`, e as considerações dele dizem `Microsoft\Outlook`, que é o caminho real.
+
+## Segunda rodada, depois das correções
+
+**Esta rodada não é às cegas.** As correções foram feitas depois de ver o gabarito, então ela mede se as lacunas fecharam, não a capacidade em um caso novo. A nota às cegas continua sendo a de cima: 20 de 57. O próximo teste que vale como independente precisa de outro caso.
+
+O caso foi processado do zero, sem a linha do tempo completa: 188 leituras, nenhuma falha, cerca de 54 minutos (34 da análise e 19 do exame profundo) e 20 GB.
+
+| Situação | Perguntas | De 57 |
+| --- | --- | --- |
+| Dado na tela confere com o gabarito | 49 | 86% |
+| Parcial | 5 | 9% |
+| Sem resposta | 3 | 5% |
+
+A conferência foi feita pelo banco do caso, comparando cada resposta com o gabarito, com busca e abertura do caso conferidas no navegador. As 49 ainda pedem interpretação de quem examina, como a 34, respondida pela imagem do CD-R embora o gabarito peça só o PC, e a 52, em que o alvo do Eraser sai dos nomes no diário do NTFS.
+
+**Continuam parciais:**
+
+- 6: falta a contagem de logons por conta.
+- 9: falta o nome da placa de rede.
+- 33: os quatro eventos de gravação conferem, mas a gravação como pendrive, das 16:53 às 16:58 locais, não tem data.
+- 36: faltam as datas internas do documento.
+- 47: as cópias de sombra aparecem como arquivos, sem os metadados de cada cópia.
+
+**Continuam sem resposta:**
+
+- 39: as miniaturas não são extraídas.
+- 48 e 49: o conteúdo das cópias de sombra não é montado, o que depende de uma ferramenta ainda não liberada.
+
+**O que mudou:**
+
+- Novas leituras: atalhos, listas de atalhos, pastas navegadas, lixeira, inclusive esvaziada, e diário do NTFS.
+- E-mails com data, remetente, destinatário, pasta e corpo. Histórico do Internet Explorer com URL. Banco da busca do Windows lido.
+- CD-R em UDF: entradas de diretório, inclusive as apagadas, e os 17 documentos recuperados por assinatura, com os tamanhos do gabarito. Doze trazem o nome original no próprio arquivo ou o tipo certo; os formatos antigos do Office só trazem trechos de texto.
+- RM#2: os 17 arquivos apagados foram lidos com o tamanho exato do gabarito.
+- Hash com SHA-1, nome da imagem e comparação com o hash gravado no E01. Os quatro conferem. Partições com tamanho.
+- Corrigido um erro encontrado no caminho: em um caso com várias imagens, abrir um arquivo lia sempre a primeira imagem.

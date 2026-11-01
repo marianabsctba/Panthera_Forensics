@@ -119,6 +119,7 @@ func (m *Motor) LerArquivo(ctx context.Context, c *caso.Caso, registro, limite i
 	}
 	var d struct {
 		Inode    string `json:"inode"`
+		Imagem   string `json:"imagem"`
 		Particao *int64 `json:"particao"`
 		Tamanho  int64  `json:"tamanho"`
 		Residual bool   `json:"residual"`
@@ -172,7 +173,7 @@ func (m *Motor) LerArquivo(ctx context.Context, c *caso.Caso, registro, limite i
 	if dirBin == "" {
 		return nil, 0, errors.New("leitura de conteudo indisponivel para esta fonte")
 	}
-	conteudo, err := disco.LerArquivo(dirBin, dirEntrada, *d.Particao, d.Inode, limite)
+	conteudo, err := disco.LerArquivo(dirBin, dirEntrada, d.Imagem, *d.Particao, d.Inode, limite)
 	if err != nil {
 		return nil, 0, err
 	}

@@ -1,0 +1,50 @@
+contrato: 1
+nome: usn
+titulo: Leitura do diário do NTFS
+versao: "2026-10-25"
+ferramenta: mftecmd
+reconhece:
+  - tipo: diario-ntfs
+    nomes: [$J]
+consome: [diario-ntfs]
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/MFTECmd.zip
+    sha256: cf5892102c75df6000e87aec5653046f453f65846f361ee48ed1ab2771b0f1e3
+comando:
+  windows:
+    exec: MFTECmd.exe
+    args: [-f, "{entrada}", --csv, "{saida}", --csvf, diario.csv]
+saida:
+  arquivos: diario.csv
+  formato: csv
+  # So o que responde a perguntas sobre o usuario. O diario inteiro tem centenas de milhares
+  # de linhas e continua preservado na pasta da execucao.
+  mapas:
+    - tipo: evento
+      se_regex: {UpdateReasons: RenameOldName}
+      quando: "{UpdateTimestamp}"
+      fonte: Diário do NTFS
+      descricao: "Renomeado, nome antigo: {Name}"
+      origem_local: "USN {UpdateSequenceNumber}, entrada {EntryNumber}"
+      entidades:
+        - {tipo: arquivo, valor: "{Name}"}
+    - tipo: evento
+      se_regex: {UpdateReasons: RenameNewName}
+      se_nao_regex: {UpdateReasons: Close}
+      quando: "{UpdateTimestamp}"
+      fonte: Diário do NTFS
+      descricao: "Renomeado, nome novo: {Name}"
+      origem_local: "USN {UpdateSequenceNumber}, entrada {EntryNumber}"
+      entidades:
+        - {tipo: arquivo, valor: "{Name}"}
+    # Criado e apagado na mesma linha sao temporarios do sistema, aos milhares.
+    - tipo: evento
+      se_regex: {UpdateReasons: FileDelete}
+      se_nao_regex: {UpdateReasons: FileCreate}
+      quando: "{UpdateTimestamp}"
+      fonte: Diário do NTFS
+      descricao: "Apagado: {Name}"
+      origem_local: "USN {UpdateSequenceNumber}, entrada {EntryNumber}"
+      entidades:
+        - {tipo: arquivo, valor: "{Name}"}

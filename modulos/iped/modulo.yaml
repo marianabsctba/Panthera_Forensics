@@ -24,6 +24,10 @@ comando:
     # UTC fixo: no fuso local, as datas saem com abreviacoes ambiguas, como BRST. Sem
     # --downloadInternetData, de proposito: o exame nao pode fazer contato externo.
     args: [-Duser.timezone=UTC, -Duser.language=en, -jar, "{ferramenta}/iped-4.3.1/iped.jar", -d, "{entrada}", -o, "{saida}/exame", --nogui, --nologfile]
+    # E-mails, historico e o banco da busca do Windows ficam dentro do indice, fora da lista.
+    depois:
+      exec: iped-4.3.1/jre/bin/java.exe
+      args: [-Dnashorn.args=--no-deprecation-warning, -cp, "{ferramenta}/iped-4.3.1/lib/lucene-core-9.2.0.jar;{ferramenta}/iped-4.3.1/lib/sqlite-jdbc-3.41.2.2.jar", jdk.nashorn.tools.Shell, -scripting, "{regras}/iped/itens.js", --, "{saida}/exame", "{saida}"]
 # A busca no conteudo roda sem abrir a interface da ferramenta: tudo aparece na nossa tela.
 consulta:
   exec: iped-4.3.1/jre/bin/java.exe
@@ -66,3 +70,68 @@ saida:
       fonte: "Exame profundo: recuperados"
       descricao: "Arquivo recuperado do espaço livre: {Path}"
       origem_local: "{TrackId}"
+  adicionais:
+    - arquivos: mensagens.jsonl
+      formato: jsonl
+      mapas:
+        - tipo: evento
+          manter_sem_data: true
+          quando: "{data}"
+          fonte: E-mail
+          descricao: "E-mail ({situacao}, pasta {pasta}) de {de} para {para}: {assunto}. {corpo} {anexos}"
+          origem_local: "{caminho}"
+          entidades:
+            - {tipo: email, valor: "{remetente}"}
+    - arquivos: historico.jsonl
+      formato: jsonl
+      mapas:
+        # Visited e o historico de fato. O resto dos enderecos vem do cache e de recursos das
+        # paginas, o que nao significa que a pessoa abriu cada um.
+        - tipo: evento
+          se_regex: {url: '^Visited: '}
+          manter_sem_data: true
+          quando: "{visita}"
+          fonte: Histórico do Internet Explorer
+          descricao: "{url}"
+          origem_local: "{caminho}"
+          entidades:
+            - {tipo: url, valor: "{url}", remover: '^Visited: [^@]*@|[?#].*$'}
+        - tipo: evento
+          se_regex: {url: '^https?://'}
+          manter_sem_data: true
+          quando: "{visita}"
+          fonte: Cache do Internet Explorer
+          descricao: "{url}"
+          origem_local: "{caminho}"
+    - arquivos: busca-windows.jsonl
+      formato: jsonl
+      mapas:
+        - tipo: evento
+          se_regex: {Microsoft_IE_TargetUrl: .}
+          manter_sem_data: true
+          quando: "{System_DateModified}"
+          fonte: Busca do Windows
+          descricao: "Página no índice da busca: {Microsoft_IE_TargetUrl} {Microsoft_IE_Title}"
+          origem_local: "DocID {DocID}"
+        - tipo: evento
+          se_regex: {System_Subject: .}
+          se: {System_IsAttachment: "false"}
+          manter_sem_data: true
+          quando: "{System_Message_DateSent}"
+          fonte: Busca do Windows
+          descricao: "E-mail no índice da busca: {System_Message_FromName} para {System_Message_ToName}: {System_Subject}. {System_Search_AutoSummary} {System_Message_AttachmentNames}"
+          origem_local: "DocID {DocID}"
+        - tipo: evento
+          se: {System_Search_Store: file}
+          manter_sem_data: true
+          quando: "{System_DateModified}"
+          fonte: Busca do Windows
+          descricao: "Arquivo no índice da busca: {System_ItemPathDisplay}"
+          origem_local: "DocID {DocID}"
+        - tipo: evento
+          se: {System_Search_Store: StickyNotes}
+          manter_sem_data: true
+          quando: "{System_DateModified}"
+          fonte: Busca do Windows
+          descricao: "Nota no índice da busca: {System_ItemPathDisplay} {System_Search_AutoSummary}"
+          origem_local: "DocID {DocID}"

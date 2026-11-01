@@ -240,3 +240,23 @@ func TestContratoInvalidoFalha(t *testing.T) {
 		t.Fatal("registro sem descricao deveria falhar")
 	}
 }
+
+func TestFiltroPorExpressaoEDataDoExame(t *testing.T) {
+	s := modulo.Saida{Formato: "csv", Mapas: []modulo.Mapa{
+		{
+			Tipo: "evento", Quando: "{Quando}", Descricao: "Nome novo: {Nome}",
+			SeRegex:    map[string]string{"Motivo": "RenameNewName"},
+			SeNaoRegex: map[string]string{"Motivo": "Close"},
+		},
+	}}
+	r := coletar(t, s, "Nome,Motivo,Quando\n"+
+		"a.txt,DataExtend|RenameNewName,\"Mar 23, 2015 17:29:27.000000000\"\n"+
+		"a.txt,RenameNewName|Close,\"Mar 23, 2015 17:29:28.000000000\"\n"+
+		"b.txt,FileCreate,\"Mar 23, 2015 17:29:29.000000000\"\n")
+	if len(r) != 1 || r[0].Descricao != "Nome novo: a.txt" {
+		t.Fatalf("registros: %+v", r)
+	}
+	if r[0].Quando != "2015-03-23T17:29:27.000000000Z" {
+		t.Fatalf("data: %s", r[0].Quando)
+	}
+}

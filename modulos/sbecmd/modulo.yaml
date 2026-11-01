@@ -1,0 +1,37 @@
+contrato: 1
+nome: sbecmd
+titulo: Leitura de pastas navegadas
+versao: "2026-11-01"
+consome: [registro]
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/SBECmd.zip
+    sha256: 57a29963b30e902122eec2678245fb07db803ef1f98dbc91ef65fc27b9fea408
+comando:
+  windows:
+    exec: SBECmd.exe
+    # A ferramenta so aceita pasta e ignora o que nao for registro de usuario. Um registro
+    # por vez, porque a saida leva o nome do arquivo e dois usuarios se sobrescreveriam.
+    args: [-d, "{entrada_pasta}", --csv, "{saida}"]
+saida:
+  arquivos: "*.csv"
+  formato: csv
+  mapas:
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{LastWriteTime}"
+      fonte: Pasta navegada
+      descricao: "Pasta navegada: {AbsolutePath}"
+      origem_local: "{BagPath}"
+      entidades:
+        - {tipo: arquivo, valor: "{Value}"}
+    - tipo: evento
+      quando: "{FirstInteracted}"
+      fonte: Pasta navegada
+      descricao: "Pasta aberta pela primeira vez: {AbsolutePath}"
+      origem_local: "{BagPath}"
+    - tipo: evento
+      quando: "{LastInteracted}"
+      fonte: Pasta navegada
+      descricao: "Pasta aberta pela última vez: {AbsolutePath}"
+      origem_local: "{BagPath}"

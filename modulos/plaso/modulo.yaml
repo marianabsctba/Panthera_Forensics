@@ -5,6 +5,8 @@ versao: "wsl"
 requer_wsl: true
 # A parte mais lenta da analise: cerca de 13 dos 17 minutos em um disco de 1,1 GB.
 opcional: true
+# Pode levar horas em um disco grande, entao fica fora do exame profundo.
+demorado: true
 reconhece:
   - tipo: disco
     magica_hex: "455646090d0aff00"

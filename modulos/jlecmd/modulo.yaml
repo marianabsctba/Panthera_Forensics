@@ -1,0 +1,29 @@
+contrato: 1
+nome: jlecmd
+titulo: Leitura de listas de atalhos
+versao: "2026-11-01"
+reconhece:
+  - tipo: lista-de-atalhos
+    extensoes: [.automaticDestinations-ms]
+consome: [lista-de-atalhos]
+modo: lote
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/JLECmd.zip
+    sha256: 46854e30af96913260668ff3ea2d65017cb2f146a3d52e94addaeb8e86854506
+comando:
+  windows:
+    exec: JLECmd.exe
+    args: [-d, "{entrada}", --csv, "{saida}", -q]
+saida:
+  arquivos: "*AutomaticDestinations.csv"
+  formato: csv
+  mapas:
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{LastModified}"
+      fonte: Lista de atalhos
+      descricao: "Aberto por {AppIdDescription}: {Path}"
+      origem_arquivo: "{SourceFile}"
+      entidades:
+        - {tipo: arquivo, valor: "{Path}", remover: '^.*\\'}

@@ -27,6 +27,7 @@ func motorComDisco(t *testing.T) (string, func(...string) *caso.Caso) {
 	}
 	m.Nucleo = exe
 	m.Profundo = os.Getenv("PANTHERA_PROFUNDO") != ""
+	m.Completo = m.Profundo
 	return dados, func(caminhos ...string) *caso.Caso { return processar(t, m, caminhos...) }
 }
 

@@ -313,6 +313,9 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 		if !condicaoAtendida(m.Se, linha) || (len(m.SeNao) > 0 && condicaoAtendida(m.SeNao, linha)) {
 			continue
 		}
+		if !regexAtendida(m.SeRegex, linha) || (len(m.SeNaoRegex) > 0 && regexAtendida(m.SeNaoRegex, linha)) {
+			continue
+		}
 		bruto := expandir(m.Quando, linha)
 		// Um mapa com campo de data declarado e vazio nao gera registro: e o caso
 		// de uma linha da MFT sem a quarta data.
@@ -396,6 +399,26 @@ func aplicarEscala(bruto, escala string) string {
 func condicaoAtendida(se map[string]string, linha map[string]any) bool {
 	for campo, esperado := range se {
 		if !strings.EqualFold(texto(buscar(linha, campo)), esperado) {
+			return false
+		}
+	}
+	return true
+}
+
+// regexCompiladas evita recompilar a mesma expressao a cada linha da saida.
+var regexCompiladas sync.Map
+
+func regexAtendida(se map[string]string, linha map[string]any) bool {
+	for campo, expressao := range se {
+		var re *regexp.Regexp
+		if guardada, ok := regexCompiladas.Load(expressao); ok {
+			re = guardada.(*regexp.Regexp)
+		} else {
+			// O manifesto ja validou a expressao ao ser carregado.
+			re = regexp.MustCompile(expressao)
+			regexCompiladas.Store(expressao, re)
+		}
+		if !re.MatchString(texto(buscar(linha, campo))) {
 			return false
 		}
 	}
@@ -505,6 +528,8 @@ var formatosComFuso = []string{
 var formatosSemFuso = []string{
 	"2006-01-02 15:04:05.999999999",
 	"2006-01-02T15:04:05.999999999",
+	// Tabelas do exame profundo, gravadas com UTC fixo.
+	"Jan 02, 2006 15:04:05.999999999",
 }
 
 // interpretarData devolve a data em UTC. Sem fuso declarado, assume UTC, que e

@@ -1,0 +1,33 @@
+contrato: 1
+nome: lecmd
+titulo: Leitura de atalhos
+versao: "2026-11-01"
+reconhece:
+  - tipo: atalho
+    magica_hex: "4c0000000114020000000000c000000000000046"
+    extensoes: [.lnk]
+consome: [atalho]
+modo: lote
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/LECmd.zip
+    sha256: fbcb7390109717a0ff9a1cbdd5e3fd9f1896b328dcca0e6879f69c659dca8ebc
+comando:
+  windows:
+    exec: LECmd.exe
+    args: [-d, "{entrada}", --csv, "{saida}", --csvf, atalhos.csv, -q]
+saida:
+  arquivos: atalhos.csv
+  formato: csv
+  mapas:
+    # As datas sao do arquivo apontado. A data do proprio atalho, que indica quando ele
+    # foi aberto, vem da leitura de disco: nesta copia ela seria a da extracao.
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{TargetAccessed}"
+      fonte: Atalho
+      descricao: "Atalho para {LocalPath} {NetworkPath} {CommonPath} {TargetIDAbsolutePath} {DriveType} {VolumeLabel}"
+      origem_arquivo: "{SourceFile}"
+      entidades:
+        - {tipo: arquivo, valor: "{LocalPath}", remover: '^.*\\'}
+        - {tipo: arquivo, valor: "{CommonPath}", remover: '^.*\\'}

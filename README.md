@@ -17,11 +17,14 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Módulos de memória (Volatility) | **Não validados**: não listam processos nas imagens do NIST, de 2005 e 2006 |
 | Módulos bulk_extractor, YARA, capa, Chainsaw, tshark, Zeek, Suricata e Plaso | Executados com dados públicos reais, ver [validação](validacao/README.md) |
 | Ambiente Linux dedicado (WSL) para tshark, Zeek, Suricata e Plaso | Instalado e em uso; a criação pelo `preparar` a partir do zero ainda não foi testada |
-| Exame profundo opcional (IPED e Plaso) | DFR-01 confere com o gabarito no IPED; o Plaso só tem conferência de datas |
+| Exame profundo opcional (IPED) | DFR-01 confere com o gabarito; e-mails, histórico do Internet Explorer e busca do Windows conferidos no Data Leakage |
+| Linha do tempo completa opcional (Plaso) | Separada do exame profundo por poder levar horas; só tem conferência de datas |
+| Atalhos, listas de atalhos, pastas navegadas, lixeira e diário do NTFS | Conferidos com o gabarito do Data Leakage |
+| CD e DVD em UDF | Leitura própria por assinatura; conferida em um único caso, o CD-R do Data Leakage |
 | Visão geral, gráficos, filtros, mapa de conexões, marcações e fuso da evidência | Prontos, conferidos no navegador com o Hacking Case |
-| Busca no conteúdo | Arquivos de texto pequenos fora da pasta do Windows na análise padrão; demais formatos no exame profundo, na janela do IPED |
-| Recuperação do conteúdo de arquivos apagados | Só pela janela do IPED, sem teste de conteúdo com gabarito |
-| Teste às cegas com um caso não usado para calibrar | Não feito |
+| Busca no conteúdo | Arquivos de texto de até 2 MB fora da pasta do Windows na análise padrão; demais formatos no exame profundo, sem janela de outro programa |
+| Recuperação do conteúdo de arquivos apagados | Pela tela do programa; 17 arquivos da RM#2 do Data Leakage com o tamanho do gabarito |
+| Teste às cegas com um caso não usado para calibrar | Data Leakage: 20 de 57 sem ajuda. Depois de corrigir, 49 de 57, já sem valor de teste às cegas ([nota](validacao/data-leakage-nota.md)) |
 | Coletor para a máquina-alvo | Não feito |
 
 ## Antivírus

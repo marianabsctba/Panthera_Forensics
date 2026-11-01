@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/md5"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -31,6 +32,7 @@ import (
 // Particao e um trecho da imagem que pode conter um sistema de arquivos.
 type Particao struct {
 	Inicio    int64
+	Setores   int64
 	Descricao string
 }
 
@@ -49,7 +51,7 @@ type Entrada struct {
 	NomeArquivo bool
 }
 
-var linhaMmls = regexp.MustCompile(`^\d+:\s+\d+:\d+\s+(\d+)\s+\d+\s+\d+\s+(.*)$`)
+var linhaMmls = regexp.MustCompile(`^\d+:\s+\d+:\d+\s+(\d+)\s+\d+\s+(\d+)\s+(.*)$`)
 
 // InterpretarMmls devolve as particoes alocadas. Sem tabela de particoes, a imagem
 // inteira e tratada como um unico volume.
@@ -64,7 +66,11 @@ func InterpretarMmls(saida string) []Particao {
 		if err != nil {
 			continue
 		}
-		p = append(p, Particao{Inicio: inicio, Descricao: strings.TrimSpace(m[2])})
+		setores, err := strconv.ParseInt(m[2], 10, 64)
+		if err != nil {
+			continue
+		}
+		p = append(p, Particao{Inicio: inicio, Setores: setores, Descricao: strings.TrimSpace(m[3])})
 	}
 	if len(p) == 0 {
 		return []Particao{{Inicio: 0, Descricao: "volume sem tabela de partições"}}
@@ -114,6 +120,11 @@ func InterpretarBody(linha string) (Entrada, bool) {
 var artefatos = regexp.MustCompile(`(?i)(` +
 	`/windows/(system32/winevt/logs/[^/]+\.evtx|prefetch/[^/]+\.pf|system32/config/(software|system|sam|security))` +
 	`|/(documents and settings|users)/[^/]+/ntuser\.dat` +
+	`|/(documents and settings|users)/[^/]+/.*/usrclass\.dat` +
+	// Atalhos e listas de atalhos dizem o que foi aberto, inclusive em midia que ja saiu.
+	`|/(documents and settings|users)/[^/]+/.+\.lnk` +
+	`|/users/[^/]+/.+/automaticdestinations/[^/]+\.automaticdestinations-ms` +
+	`|/\$extend/\$usnjrnl:\$j` +
 	`|/(google/chrome|microsoft/edge|bravesoftware/brave-browser)/user data/[^/]+/(history|cookies|web data|bookmarks|preferences|favicons|top sites)` +
 	// Executaveis fora da pasta do Windows, onde programas instalados pelo usuario ficam.
 	`|/(program files[^/]*|documents and settings|users|recycler|\$recycle\.bin|temp)/.+\.(exe|dll|scr|sys)` +
@@ -124,9 +135,14 @@ var artefatos = regexp.MustCompile(`(?i)(` +
 var (
 	textos       = regexp.MustCompile(`(?i)\.(ini|txt|log|cfg|conf|url|xml|htm|html|csv|nfo|lst)$`)
 	pastaWindows = regexp.MustCompile(`(?i)^/windows/`)
+	// O log de instalacao de dispositivos guarda a primeira conexao de cada USB.
+	textoDoSistema = regexp.MustCompile(`(?i)^/windows/inf/setupapi\.dev(\.\d+_\d+)?\.log$`)
+	notas          = regexp.MustCompile(`(?i)/sticky notes/stickynotes\.snt$`)
+	// A lixeira vazia ainda guarda quem foi apagado e quando, nas entradas $I apagadas.
+	lixeira = regexp.MustCompile(`(?i)/\$recycle\.bin/[^/]+/\$i[^/]*$|/recycler/[^/]+/info2$`)
 )
 
-const maximoTexto = 256 * 1024
+const maximoTexto = 2 * 1024 * 1024
 
 // TextoLegivel converte o conteudo em texto, ou diz que e binario. Aceita UTF-16, comum
 // em arquivos do Windows, e Latin-1, comum nos antigos.
@@ -158,6 +174,29 @@ func TextoLegivel(b []byte) (string, bool) {
 		runas[i] = rune(c)
 	}
 	return string(runas), true
+}
+
+var (
+	trechoUTF16 = regexp.MustCompile(`(?:[\x20-\x7e]\x00){2,}`)
+	internoNota = regexp.MustCompile(`(?i)^(root entry|version|metafile|[0-9a-f]{8}-[0-9a-f-]+|\d+)$`)
+)
+
+// TextoDasNotas tira o texto de um StickyNotes.snt, um arquivo composto com cada nota
+// em um fluxo proprio. O texto simples de cada nota fica em UTF-16, junto dos nomes de
+// fluxo, que nao interessam.
+func TextoDasNotas(b []byte) string {
+	var linhas []string
+	for _, trecho := range trechoUTF16.FindAll(b, -1) {
+		unidades := make([]uint16, 0, len(trecho)/2)
+		for i := 0; i+1 < len(trecho); i += 2 {
+			unidades = append(unidades, uint16(trecho[i])|uint16(trecho[i+1])<<8)
+		}
+		linha := strings.TrimSpace(string(utf16.Decode(unidades)))
+		if linha != "" && !internoNota.MatchString(linha) {
+			linhas = append(linhas, linha)
+		}
+	}
+	return strings.Join(linhas, "\n")
 }
 
 // registro segue o formato "contrato" dos modulos.
@@ -334,23 +373,42 @@ func (t *trabalho) comando(nome string, args ...string) *exec.Cmd {
 // hashConteudo calcula o hash dos dados do disco, e nao dos arquivos da imagem: um E01
 // comprimido so pode ser comparado com a aquisicao original depois de lido por dentro.
 func (t *trabalho) hashConteudo(segmentos []string) error {
-	h5, h256 := md5.New(), sha256.New()
+	h5, h1, h256 := md5.New(), sha1.New(), sha256.New()
 	var erros bytes.Buffer
 	c := t.comando("img_cat", segmentos...)
-	c.Stdout = io.MultiWriter(h5, h256)
+	c.Stdout = io.MultiWriter(h5, h1, h256)
 	c.Stderr = &erros
 	if err := c.Run(); err != nil {
 		return fmt.Errorf("img_cat: %w: %s", err, strings.TrimSpace(erros.String()))
 	}
-	md5Hex, shaHex := hex.EncodeToString(h5.Sum(nil)), hex.EncodeToString(h256.Sum(nil))
-	return t.registros.Encode(registro{
+	md5Hex, sha1Hex, shaHex := hex.EncodeToString(h5.Sum(nil)), hex.EncodeToString(h1.Sum(nil)), hex.EncodeToString(h256.Sum(nil))
+	nome := filepath.Base(segmentos[0])
+	dados := map[string]any{"imagem": nome, "md5_conteudo": md5Hex, "sha1_conteudo": sha1Hex, "sha256_conteudo": shaHex, "segmentos": len(segmentos)}
+	r := registro{
 		Tipo: "evento", Fonte: "Imagem de disco",
-		Descricao:   "Hash do conteúdo da imagem: MD5 " + md5Hex,
-		OrigemLocal: "imagem inteira",
-		Entidades:   []entidade{{Tipo: "hash", Valor: md5Hex}, {Tipo: "hash", Valor: shaHex}},
-		Dados:       map[string]any{"md5_conteudo": md5Hex, "sha256_conteudo": shaHex, "segmentos": len(segmentos)},
-	})
+		Descricao:   fmt.Sprintf("Hash do conteúdo de %s: MD5 %s, SHA-1 %s", nome, md5Hex, sha1Hex),
+		OrigemLocal: nome,
+		Entidades:   []entidade{{Tipo: "hash", Valor: md5Hex}, {Tipo: "hash", Valor: sha1Hex}, {Tipo: "hash", Valor: shaHex}},
+		Dados:       dados,
+	}
+	// O E01 guarda o hash calculado na aquisicao: a comparacao mostra se a copia mudou depois.
+	var informacao bytes.Buffer
+	c = t.comando("img_stat", segmentos...)
+	c.Stdout = &informacao
+	_ = c.Run()
+	if m := hashGravado.FindStringSubmatch(informacao.String()); m != nil {
+		dados["md5_gravado"] = strings.ToLower(m[1])
+		if strings.EqualFold(m[1], md5Hex) {
+			r.Descricao += ". Confere com o hash gravado na aquisição"
+		} else {
+			r.Tipo, r.Severidade = "alerta", "alta"
+			r.Descricao += ". NÃO confere com o hash gravado na aquisição: " + strings.ToLower(m[1])
+		}
+	}
+	return t.registros.Encode(r)
 }
+
+var hashGravado = regexp.MustCompile(`(?i)MD5 hash of data:\s*([0-9a-f]{32})`)
 
 func (t *trabalho) imagem(segmentos []string) error {
 	if err := t.hashConteudo(segmentos); err != nil {
@@ -363,6 +421,16 @@ func (t *trabalho) imagem(segmentos []string) error {
 	_ = c.Run()
 	lidas := 0
 	for _, p := range InterpretarMmls(mmls.String()) {
+		if p.Setores > 0 {
+			if err := t.registros.Encode(registro{
+				Tipo: "evento", Fonte: "Imagem de disco",
+				Descricao:   fmt.Sprintf("Partição de %s no setor %d: %d setores (%.1f GB), %s", filepath.Base(segmentos[0]), p.Inicio, p.Setores, float64(p.Setores)*512/(1<<30), p.Descricao),
+				OrigemLocal: fmt.Sprintf("partição no setor %d", p.Inicio),
+				Dados:       map[string]any{"imagem": filepath.Base(segmentos[0]), "inicio": p.Inicio, "setores": p.Setores, "descricao": p.Descricao},
+			}); err != nil {
+				return err
+			}
+		}
 		ok, err := t.particao(segmentos, p)
 		if err != nil {
 			return err
@@ -381,7 +449,17 @@ func (t *trabalho) imagem(segmentos []string) error {
 		}
 	}
 	if lidas == 0 {
-		return fmt.Errorf("nenhum sistema de arquivos reconhecido: %s", t.motivo)
+		// Antes de desistir: CD e DVD em UDF tem leitura propria.
+		otico, err := t.discoOtico(segmentos)
+		if err != nil {
+			return err
+		}
+		if otico {
+			return nil
+		}
+		// A suspeita de criptografia vem so da entropia alta, que tambem aparece em conteudo
+		// comprimido e em formatos desconhecidos.
+		return fmt.Errorf("nenhum sistema de arquivos reconhecido, e isso não prova criptografia: %s", t.motivo)
 	}
 	return nil
 }
@@ -427,15 +505,18 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 		}
 		vistas[chave] = true
 		for _, r := range Registros(e, p.Inicio) {
+			// Um caso pode ter varias imagens: o inode so faz sentido junto com a imagem certa.
+			r.Dados["imagem"] = filepath.Base(segmentos[0])
 			if err := t.registros.Encode(r); err != nil {
 				return false, err
 			}
 		}
-		if !e.Apagado && !e.Residual && !e.NomeArquivo && artefatos.MatchString(e.Caminho) {
+		if !e.Residual && !e.NomeArquivo && ((!e.Apagado && artefatos.MatchString(e.Caminho)) || lixeira.MatchString(e.Caminho)) {
 			nomes = append(nomes, e)
 		}
 		if !e.Apagado && !e.Residual && !e.NomeArquivo && e.Tamanho > 0 && e.Tamanho <= maximoTexto &&
-			textos.MatchString(e.Caminho) && !pastaWindows.MatchString(e.Caminho) {
+			(notas.MatchString(e.Caminho) || textoDoSistema.MatchString(e.Caminho) ||
+				(textos.MatchString(e.Caminho) && !pastaWindows.MatchString(e.Caminho))) {
 			legiveis = append(legiveis, e)
 		}
 	}
@@ -478,6 +559,9 @@ func (t *trabalho) indexarTexto(segmentos []string, p Particao, e Entrada) error
 		return nil
 	}
 	texto, ok := TextoLegivel(conteudo)
+	if notas.MatchString(e.Caminho) {
+		texto, ok = TextoDasNotas(conteudo), true
+	}
 	if !ok {
 		return nil
 	}
@@ -507,24 +591,50 @@ func (t *trabalho) extrair(segmentos []string, p Particao, e Entrada) error {
 	if err := c.Run(); err != nil {
 		return err
 	}
+	nome := baseNome(e.Caminho)
+	// A ferramenta do diario so reconhece o fluxo pelo nome dele, sem o arquivo da frente.
+	if strings.EqualFold(nome, "$UsnJrnl:$J") {
+		nome = "$J"
+	}
 	return t.derivados.Encode(Derivado{
-		Arquivo: filepath.ToSlash(relativo), Nome: baseNome(e.Caminho),
+		Arquivo: filepath.ToSlash(relativo), Nome: nome,
 		Origem: e.Caminho, Evidencia: segmentos[0],
 	})
 }
 
+// escolherImagem acha os segmentos da imagem pedida. Registros antigos nao dizem a imagem:
+// com mais de uma no caso, ler a primeira poderia devolver o arquivo de outro disco.
+func escolherImagem(grupos [][]string, imagem string) ([]string, error) {
+	if len(grupos) == 0 {
+		return nil, errors.New("imagem nao encontrada")
+	}
+	if imagem == "" {
+		if len(grupos) > 1 {
+			return nil, errors.New("este registro nao diz de qual imagem veio: processe o caso de novo para abrir o arquivo")
+		}
+		return grupos[0], nil
+	}
+	for _, g := range grupos {
+		if strings.EqualFold(filepath.Base(g[0]), imagem) {
+			return g, nil
+		}
+	}
+	return nil, fmt.Errorf("imagem nao encontrada: %s", imagem)
+}
+
 // LerArquivo devolve o conteudo de um arquivo de uma imagem, inclusive apagado, pelo inode
 // que a leitura de disco registrou. Limite zero traz o arquivo inteiro.
-func LerArquivo(dirBin, dirEntrada string, particao int64, inode string, limite int64) ([]byte, error) {
+func LerArquivo(dirBin, dirEntrada, imagem string, particao int64, inode string, limite int64) ([]byte, error) {
 	grupos, err := Agrupar(dirEntrada)
 	if err != nil {
 		return nil, err
 	}
-	if len(grupos) == 0 {
-		return nil, errors.New("imagem nao encontrada")
+	segmentos, err := escolherImagem(grupos, imagem)
+	if err != nil {
+		return nil, err
 	}
 	t := &trabalho{bin: dirBin}
-	args := append([]string{"-o", strconv.FormatInt(particao, 10)}, grupos[0]...)
+	args := append([]string{"-o", strconv.FormatInt(particao, 10)}, segmentos...)
 	c := t.comando("icat", append(args, inode)...)
 	tubo, err := c.StdoutPipe()
 	if err != nil {
