@@ -267,6 +267,10 @@ func unicas(todas []caso.Evidencia) []caso.Evidencia {
 // modulos: ela fica registrada no caso e na custodia.
 func (m *Motor) Processar(ctx context.Context, c *caso.Caso, avisar Progresso) (Resultado, error) {
 	var res Resultado
+	// O que ficou como "rodando" foi interrompido: so existe um processamento por caso.
+	if err := m.encerrarInterrompidas(c); err != nil {
+		return res, err
+	}
 	ausentes := map[string]bool{}
 	falhadas := map[string]bool{}
 	tratadas := map[string]bool{}
@@ -348,6 +352,42 @@ func legivel(caminho string) bool {
 	}
 	f.Close()
 	return true
+}
+
+// encerrarInterrompidas marca como falha, com registro na custodia, o que parou no meio
+// porque o programa foi fechado ou derrubado. O resultado nao foi importado.
+func (m *Motor) encerrarInterrompidas(c *caso.Caso) error {
+	linhas, err := c.DB.Query(`SELECT id,modulo FROM execucoes WHERE estado='rodando'`)
+	if err != nil {
+		return err
+	}
+	type parada struct {
+		id     int64
+		modulo string
+	}
+	var paradas []parada
+	for linhas.Next() {
+		var p parada
+		if err := linhas.Scan(&p.id, &p.modulo); err != nil {
+			linhas.Close()
+			return err
+		}
+		paradas = append(paradas, p)
+	}
+	linhas.Close()
+	if err := linhas.Err(); err != nil {
+		return err
+	}
+	for _, p := range paradas {
+		fim := time.Now().UTC().Format(time.RFC3339)
+		if _, err := c.DB.Exec(`UPDATE execucoes SET estado='falhou',fim=?,erro='interrompida antes de terminar' WHERE id=?`, fim, p.id); err != nil {
+			return err
+		}
+		if _, err := c.Custodia.Registrar("modulo.interrompido", map[string]any{"execucao": p.id, "modulo": p.modulo}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func identificarTarefa(t Tarefa) string {

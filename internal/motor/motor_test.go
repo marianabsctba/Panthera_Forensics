@@ -361,6 +361,24 @@ func TestEvidenciaRemovidaPeloAntivirusNaoParaOsOutros(t *testing.T) {
 	}
 }
 
+func TestExecucaoInterrompidaNaoFicaRodandoParaSempre(t *testing.T) {
+	m, c := montar(t)
+	if _, err := c.DB.Exec(`INSERT INTO execucoes(chave,modulo,titulo,versao,estado,inicio) VALUES('k','falso','Leitura','1','rodando','agora')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	var estado, erro string
+	if err := c.DB.QueryRow(`SELECT estado,erro FROM execucoes WHERE chave='k'`).Scan(&estado, &erro); err != nil {
+		t.Fatal(err)
+	}
+	if estado != "falhou" || !strings.Contains(erro, "interrompida") {
+		t.Fatalf("estado %s, erro %s", estado, erro)
+	}
+	verificarCustodia(t, c, "modulo.interrompido")
+}
+
 func TestZipDentroDeZip(t *testing.T) {
 	m, c := montar(t)
 	dentro := zipCom(t, map[string][]byte{"pasta/nota.txt": []byte("achado dentro do segundo pacote")})
