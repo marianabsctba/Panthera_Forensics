@@ -27,6 +27,7 @@ import (
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
 	"github.com/marianabsctba/Panthera_Forensics/internal/motor"
 	"github.com/marianabsctba/Panthera_Forensics/internal/relatorio"
+	"github.com/marianabsctba/Panthera_Forensics/modulos"
 )
 
 //go:embed estatico
@@ -382,6 +383,9 @@ func (s *Servidor) listarModulos(w http.ResponseWriter, _ *http.Request) {
 		_, roda := m.ComandoAtual()
 		_, temPacote := m.PacoteAtual()
 		inst := instalador.Instalado(m, s.Motor.DirFerramentas) || (!temPacote && m.Dir != "")
+		if m.RequerWSL {
+			inst = instalador.WSLPreparado(dirWSL(s.Motor.DirFerramentas))
+		}
 		if roda && !inst {
 			pendentes++
 		}
@@ -414,12 +418,23 @@ func (s *Servidor) instalarModulos(w http.ResponseWriter, _ *http.Request) {
 }
 
 // InstalarTodos instala o que puder e informa todas as falhas de uma vez.
-func InstalarTodos(ctx context.Context, modulos []*modulo.Manifesto, dir string) error {
+func InstalarTodos(ctx context.Context, lista []*modulo.Manifesto, dir string) error {
 	var erros []error
-	for _, m := range modulos {
+	precisaWSL := false
+	for _, m := range lista {
+		precisaWSL = precisaWSL || m.RequerWSL
 		if err := instalador.Instalar(ctx, m, dir); err != nil {
 			erros = append(erros, fmt.Errorf("%s: %w", m.Titulo, err))
 		}
 	}
+	if precisaWSL {
+		if err := instalador.PrepararWSL(ctx, dirWSL(dir), modulos.PrepararWSL); err != nil {
+			erros = append(erros, fmt.Errorf("Ambiente Linux: %w", err))
+		}
+	}
 	return errors.Join(erros...)
+}
+
+func dirWSL(dirFerramentas string) string {
+	return filepath.Join(filepath.Dir(dirFerramentas), "wsl")
 }

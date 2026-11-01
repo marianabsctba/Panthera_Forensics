@@ -1,0 +1,35 @@
+contrato: 1
+nome: bulk-extractor
+titulo: Vestígios no conteúdo do disco
+versao: "2.2.0"
+ferramenta: bulk-extractor
+reconhece:
+  - tipo: disco
+    magica_hex: "455646090d0aff00"
+    extensoes: [.dd, .e01, .001, .002, .003, .004, .005, .006, .007, .008, .009, .010, .011, .012]
+consome: [disco]
+modo: imagem
+instalar:
+  windows-amd64:
+    url: https://github.com/simsong/bulk_extractor/releases/download/v2.2.0/bulk_extractor64.exe
+    sha256: dfcc678ee3b7da111e8fba6259c4e842ffffcbe42dd96e6c6e6cc238d74bd911
+    arquivo: bulk_extractor64.exe
+comando:
+  windows:
+    exec: bulk_extractor64.exe
+    args: [-o, "{saida}/vestigios", "{entrada}"]
+saida:
+  arquivos: vestigios/*.txt
+  # Listas pequenas e de alto valor. As demais ficam preservadas na saida bruta.
+  somente: [email, ccn, ip, telephone]
+  # Pacotes de rede achados no disco seguem para os modulos de rede.
+  derivar: [vestigios/packets.pcap]
+  formato: tsv
+  colunas: [local, valor, contexto]
+  mapas:
+    - tipo: evento
+      fonte: "Conteúdo do disco: {_arquivo}"
+      descricao: "{_arquivo}: {valor}"
+      origem_local: "{local}"
+      entidades:
+        - {tipo: "{_arquivo}", valor: "{valor}"}

@@ -48,6 +48,9 @@ func carregarMotor(base string) (*motor.Motor, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := modulos.GravarRegras(filepath.Join(base, "regras")); err != nil {
+		return nil, err
+	}
 	return &motor.Motor{Modulos: modulo.Combinar(embutidos, locais), DirFerramentas: filepath.Join(base, "ferramentas")}, nil
 }
 

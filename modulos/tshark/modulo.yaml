@@ -1,0 +1,39 @@
+contrato: 1
+nome: tshark
+titulo: Consultas e pedidos na rede
+versao: "wsl"
+requer_wsl: true
+reconhece:
+  - tipo: pcap
+    magica_hex: "d4c3b2a1"
+  - tipo: pcap
+    magica_hex: "a1b2c3d4"
+  - tipo: pcap
+    magica_hex: "0a0d0d0a"
+  - tipo: pcap
+    extensoes: [.pcap, .pcapng, .cap]
+consome: [pcap]
+comando:
+  windows:
+    exec: wsl.exe
+    sistema: true
+    parcial_aceita: true
+    verificar: [-d, panthera-forense, -u, root, -e, test, -x, /usr/bin/tshark]
+    versao: [-d, panthera-forense, -u, root, -e, tshark, --version]
+    stdout: pedidos.tsv
+    # Um registro por pacote seria inviavel em uma captura real: so o que diz para onde
+    # alguem foi. A captura inteira continua preservada como evidencia.
+    args: [-d, panthera-forense, -u, root, -e, tshark, -r, "{entrada_wsl}", -Y, "dns.flags.response == 0 or http.request or tls.handshake.extensions_server_name or ftp.request", -T, fields, -E, "separator=/t", -e, frame.time_epoch, -e, ip.src, -e, ip.dst, -e, _ws.col.Protocol, -e, _ws.col.Info, -e, frame.number]
+saida:
+  arquivos: pedidos.tsv
+  formato: tsv
+  colunas: [hora, origem, destino, protocolo, resumo, pacote]
+  mapas:
+    - tipo: evento
+      quando: "{hora}"
+      fonte: "Rede: {protocolo}"
+      descricao: "{origem} para {destino}: {resumo}"
+      origem_local: "pacote {pacote}"
+      entidades:
+        - {tipo: ip, valor: "{origem}"}
+        - {tipo: ip, valor: "{destino}"}

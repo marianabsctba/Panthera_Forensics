@@ -1,0 +1,37 @@
+contrato: 1
+nome: yara
+titulo: Assinaturas em executáveis
+versao: "1.22.1"
+reconhece:
+  - tipo: executavel
+    magica_hex: "4d5a"
+consome: [executavel]
+modo: lote
+instalar:
+  windows-amd64:
+    url: https://github.com/VirusTotal/yara-x/releases/download/v1.22.1/yara-x-v1.22.1-x86_64-pc-windows-msvc.zip
+    sha256: dbe8c1ec5d59d8a81c777d949c518fb5e75f1026d3419bca7817727c5d47b327
+    extras:
+      - url: https://github.com/YARAHQ/yara-forge/releases/download/20261101/yara-forge-rules-core.zip
+        sha256: c6d6915f8253bb8e9a8e282e67ae9a45d42587c1349f8bd7f7167bee651c783b
+comando:
+  windows:
+    exec: yr.exe
+    stdout: achados.ndjson
+    # Pacote core: nos testes, os maiores so acrescentaram um alarme falso, um exploit de
+    # 2017 em uma DLL de 2004. As regras proprias cobrem ferramentas de uso duplo.
+    args: [scan, --relaxed-re-syntax, --output-format, ndjson, --print-meta, --recursive, "{ferramenta}/packages/core/yara-rules-core.yar", "{regras}/yara/uso-duplo.yar", "{entrada}"]
+saida:
+  arquivos: achados.ndjson
+  formato: jsonl
+  itens: rules
+  # A pontuacao segue a escala das regras: acima de 75 costuma ser codigo malicioso.
+  faixas: {critica: 90, alta: 75, media: 50, baixa: 0}
+  mapas:
+    - tipo: alerta
+      fonte: Assinaturas
+      descricao: "{identifier}: {meta.description}"
+      severidade: "{meta.score}"
+      origem_arquivo: "{pai.path}"
+      entidades:
+        - {tipo: regra, valor: "{identifier}"}

@@ -1,0 +1,34 @@
+contrato: 1
+nome: plaso
+titulo: Linha do tempo completa do disco
+versao: "wsl"
+requer_wsl: true
+reconhece:
+  - tipo: disco
+    magica_hex: "455646090d0aff00"
+    extensoes: [.dd, .e01, .001, .002, .003, .004, .005, .006, .007, .008, .009, .010, .011, .012]
+consome: [disco]
+modo: imagem
+comando:
+  windows:
+    exec: wsl.exe
+    sistema: true
+    verificar: [-d, panthera-forense, -u, root, -e, test, -x, /usr/bin/log2timeline.py]
+    versao: [-d, panthera-forense, -u, root, -e, log2timeline.py, --version]
+    # Caminhos entram como argumentos do bash, e nunca no texto do script: o nome de uma
+    # evidencia nao e confiavel.
+    args: [-d, panthera-forense, -u, root, -e, bash, -c, 'cd "$2" && log2timeline.py -u --no_vss --partitions all --volumes all --status_view none --logfile l2t.log.gz --storage_file caso.plaso "$1" && psort.py -u --status_view none --logfile psort.log.gz -o json_line -w plaso.jsonl caso.plaso', _, "{entrada_wsl}", "{saida_wsl}"]
+saida:
+  arquivos: plaso.jsonl
+  formato: jsonl
+  # Campos enormes e repetitivos: seguem na saida bruta, mas pesariam demais no banco.
+  descartar: [pathspec, date_time, __container_type__, __type__, sha256_hash]
+  mapas:
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{timestamp}"
+      quando_escala: microssegundos
+      fonte: "Super linha do tempo: {parser}"
+      descricao: "{timestamp_desc}: {message}"
+      origem_arquivo: "{filename}"
+      origem_local: "{inode}"

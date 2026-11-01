@@ -423,7 +423,8 @@ async function abaEvidencias(area, base) {
       el("thead", {}, el("tr", {}, el("th", {}, "Leitura"), el("th", {}, "Situação"), el("th", {}, "Registros"))),
       el("tbody", {}, d.execucoes.map((x) => el("tr", {},
         el("td", {}, x.titulo),
-        el("td", {}, x.estado === "concluida" && x.registros === 0 ? el("span", { class: "selo falhou" }, "Sem resultado: confira esta leitura")
+        el("td", {}, x.estado === "concluida" && x.erro ? el("span", { class: "selo falhou" }, "Parcial: confira esta leitura")
+          : x.estado === "concluida" && x.registros === 0 ? el("span", { class: "selo falhou" }, "Sem resultado: confira esta leitura")
           : x.estado === "concluida" ? el("span", { class: "selo ok" }, "Concluída")
           : x.estado === "falhou" ? el("span", { class: "selo falhou" }, "Não concluída") : "Em andamento"),
         el("td", {}, x.registros)))))) : "");

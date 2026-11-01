@@ -10,9 +10,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -87,6 +89,35 @@ func Ler(s modulo.Saida, caminho string, entregar func(Registro) error) error {
 			dec.UseNumber()
 			if err := dec.Decode(&linha); err != nil {
 				return err
+			}
+			// Com varios arquivos de saida, o nome diz de qual deles a linha veio.
+			if len(s.Somente) > 0 {
+				base := filepath.Base(caminho)
+				linha["_arquivo"] = strings.TrimSuffix(base, filepath.Ext(base))
+			}
+			return aplicarItens(s, linha, entregar)
+		})
+	case "json":
+		// Um unico documento, que pode ser grande: a ferramenta nao escreve linha a linha.
+		var linha map[string]any
+		dec := json.NewDecoder(leitor)
+		dec.UseNumber()
+		if err := dec.Decode(&linha); err != nil {
+			return err
+		}
+		return aplicarItens(s, linha, entregar)
+	case "tsv":
+		base := filepath.Base(caminho)
+		return lerLinhas(leitor, func(dados []byte) error {
+			if len(dados) > 0 && dados[0] == '#' {
+				return nil
+			}
+			campos := strings.Split(string(dados), "\t")
+			linha := map[string]any{"_arquivo": strings.TrimSuffix(base, filepath.Ext(base))}
+			for i, nome := range s.Colunas {
+				if i < len(campos) {
+					linha[nome] = campos[i]
+				}
 			}
 			return aplicar(s, linha, entregar)
 		})
@@ -187,6 +218,77 @@ func lerCSV(s modulo.Saida, r io.Reader, entregar func(Registro) error) error {
 	}
 }
 
+// aplicarItens gera um registro por item de uma lista ou objeto aninhado. Campos do
+// documento externo ficam em "pai", e a chave de um objeto fica em "_chave".
+func aplicarItens(s modulo.Saida, linha map[string]any, entregar func(Registro) error) error {
+	if s.Itens == "" {
+		return aplicar(s, linha, entregar)
+	}
+	pai := make(map[string]any, len(linha))
+	for k, v := range linha {
+		if k != s.Itens {
+			pai[k] = v
+		}
+	}
+	entregarItem := func(chave string, v any) error {
+		item, ok := v.(map[string]any)
+		if !ok {
+			item = map[string]any{"valor": v}
+		}
+		copia := make(map[string]any, len(item)+2)
+		for k, valor := range item {
+			copia[k] = achatarPares(valor)
+		}
+		copia["pai"] = pai
+		if chave != "" {
+			copia["_chave"] = chave
+		}
+		return aplicar(s, copia, entregar)
+	}
+	switch itens := buscar(linha, s.Itens).(type) {
+	case []any:
+		for _, v := range itens {
+			if err := entregarItem("", v); err != nil {
+				return err
+			}
+		}
+	case map[string]any:
+		chaves := make([]string, 0, len(itens))
+		for k := range itens {
+			chaves = append(chaves, k)
+		}
+		sort.Strings(chaves)
+		for _, k := range chaves {
+			if err := entregarItem(k, itens[k]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// achatarPares transforma [["nome", valor], ...] em um objeto, para que campos em
+// formato de pares possam ser usados nos mapas.
+func achatarPares(v any) any {
+	lista, ok := v.([]any)
+	if !ok || len(lista) == 0 {
+		return v
+	}
+	saida := make(map[string]any, len(lista))
+	for _, e := range lista {
+		par, ok := e.([]any)
+		if !ok || len(par) != 2 {
+			return v
+		}
+		nome, ok := par[0].(string)
+		if !ok {
+			return v
+		}
+		saida[nome] = par[1]
+	}
+	return saida
+}
+
 func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error) error {
 	for _, m := range s.Mapas {
 		if !condicaoAtendida(m.Se, linha) {
@@ -198,14 +300,24 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 		if m.Quando != "" && bruto == "" && !m.ManterSemData {
 			continue
 		}
+		dados := linha
+		if len(s.Descartar) > 0 {
+			dados = make(map[string]any, len(linha))
+			for k, v := range linha {
+				dados[k] = v
+			}
+			for _, campo := range s.Descartar {
+				delete(dados, campo)
+			}
+		}
 		r := Registro{
 			Tipo:          m.Tipo,
 			Fonte:         expandir(m.Fonte, linha),
-			Descricao:     strings.TrimSpace(expandir(m.Descricao, linha)),
+			Descricao:     limparDescricao(expandir(m.Descricao, linha)),
 			Severidade:    normalizarSeveridade(s, expandir(m.Severidade, linha)),
 			OrigemArquivo: expandir(m.OrigemArquivo, linha),
 			OrigemLocal:   expandir(m.OrigemLocal, linha),
-			Dados:         linha,
+			Dados:         dados,
 		}
 		if r.Descricao == "" {
 			r.Descricao = "(sem descrição)"
@@ -213,7 +325,7 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 		// Data que nao se consegue ler nao descarta o registro: a evidencia fica
 		// visivel, com o valor original, fora da ordem da timeline.
 		if bruto != "" {
-			if q, ok := interpretarData(bruto); ok {
+			if q, ok := interpretarData(aplicarEscala(bruto, m.QuandoEscala)); ok {
 				r.Quando = q
 			} else {
 				r.QuandoBruto = bruto
@@ -229,7 +341,7 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 				v = padrao.ReplaceAllString(v, "")
 			}
 			if v = strings.TrimSpace(v); v != "" {
-				r.Entidades = append(r.Entidades, Entidade{Tipo: e.Tipo, Valor: v})
+				r.Entidades = append(r.Entidades, Entidade{Tipo: expandir(e.Tipo, linha), Valor: v})
 			}
 		}
 		if err := entregar(r); err != nil {
@@ -237,6 +349,26 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 		}
 	}
 	return nil
+}
+
+var (
+	parentesesVazios = regexp.MustCompile(`\(\s*\)`)
+	espacosSeguidos  = regexp.MustCompile(`\s{2,}`)
+)
+
+// limparDescricao tira o que sobra de um modelo quando campos opcionais vem vazios.
+func limparDescricao(texto string) string {
+	texto = parentesesVazios.ReplaceAllString(texto, "")
+	texto = espacosSeguidos.ReplaceAllString(texto, " ")
+	return strings.Trim(texto, " :")
+}
+
+// aplicarEscala transforma microssegundos desde 1970 em segundos, sem ponto flutuante.
+func aplicarEscala(bruto, escala string) string {
+	if escala != "microssegundos" || len(bruto) <= 6 || strings.ContainsAny(bruto, "-.") {
+		return bruto
+	}
+	return bruto[:len(bruto)-6] + "." + bruto[len(bruto)-6:]
 }
 
 func condicaoAtendida(se map[string]string, linha map[string]any) bool {
@@ -255,6 +387,15 @@ func normalizarSeveridade(s modulo.Saida, bruto string) string {
 	}
 	if mapeada, ok := s.Severidades[v]; ok {
 		return mapeada
+	}
+	if n, err := strconv.ParseFloat(v, 64); err == nil && len(s.Faixas) > 0 {
+		melhor, minimo := "info", math.Inf(-1)
+		for nome, limite := range s.Faixas {
+			if n >= limite && limite > minimo {
+				melhor, minimo = nome, limite
+			}
+		}
+		return melhor
 	}
 	if severidades[v] {
 		return v
@@ -325,6 +466,10 @@ func texto(v any) string {
 	}
 }
 
+// epoca reconhece segundos desde 1970, como nas ferramentas de rede. Exigir nove ou dez
+// digitos evita tomar um numero qualquer por data.
+var epoca = regexp.MustCompile(`^\d{9,10}(\.\d+)?$`)
+
 var formatosComFuso = []string{
 	time.RFC3339Nano,
 	"2006-01-02 15:04:05.999999999 -07:00",
@@ -341,17 +486,35 @@ var formatosSemFuso = []string{
 // como as ferramentas conectadas gravam.
 func interpretarData(bruto string) (string, bool) {
 	bruto = strings.TrimSpace(bruto)
+	if epoca.MatchString(bruto) {
+		// Pelo texto, e nao por ponto flutuante, que perderia precisao nos nanossegundos.
+		inteiro, fracao, _ := strings.Cut(bruto, ".")
+		segundos, err := strconv.ParseInt(inteiro, 10, 64)
+		if err == nil {
+			nanos, _ := strconv.ParseInt((fracao + "000000000")[:9], 10, 64)
+			return dataValida(time.Unix(segundos, nanos))
+		}
+	}
 	for _, f := range formatosComFuso {
 		if t, err := time.Parse(f, bruto); err == nil {
-			return formatar(t), true
+			return dataValida(t)
 		}
 	}
 	for _, f := range formatosSemFuso {
 		if t, err := time.ParseInLocation(f, bruto, time.UTC); err == nil {
-			return formatar(t), true
+			return dataValida(t)
 		}
 	}
 	return "", false
+}
+
+// dataValida recusa o marco zero, como 1970, 1601 ou o ano 1: e "sem data" escrito como
+// data. O valor original fica no registro, fora da ordem da timeline.
+func dataValida(t time.Time) (string, bool) {
+	if t.Unix() <= 0 {
+		return "", false
+	}
+	return formatar(t), true
 }
 
 // formatar usa largura fixa para que a ordem de texto no banco seja a ordem no tempo.

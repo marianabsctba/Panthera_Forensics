@@ -34,35 +34,11 @@ func Instalar(ctx context.Context, m *modulo.Manifesto, dirFerramentas string) e
 	if err := os.MkdirAll(filepath.Dir(destino), 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(destino), "baixando-*")
+	tmp, err := Baixar(ctx, p.URL, p.SHA256, filepath.Dir(destino))
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.URL, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s: resposta %s", p.URL, resp.Status)
-	}
-	h := sha256.New()
-	if _, err := io.Copy(io.MultiWriter(tmp, h), resp.Body); err != nil {
-		return err
-	}
-	if obtido := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(obtido, p.SHA256) {
-		return fmt.Errorf("%s: hash %s difere do esperado %s", p.URL, obtido, p.SHA256)
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
+	defer os.Remove(tmp)
 	if err := os.RemoveAll(destino); err != nil {
 		return err
 	}
@@ -71,14 +47,61 @@ func Instalar(ctx context.Context, m *modulo.Manifesto, dirFerramentas string) e
 		if err := os.MkdirAll(destino, 0o755); err != nil {
 			return err
 		}
-		if err := os.Rename(tmp.Name(), filepath.Join(destino, filepath.Base(p.Arquivo))); err != nil {
+		if err := os.Rename(tmp, filepath.Join(destino, filepath.Base(p.Arquivo))); err != nil {
 			return err
 		}
-	} else if err := extrair(tmp.Name(), destino); err != nil {
+	} else if err := extrair(tmp, destino); err != nil {
 		os.RemoveAll(destino)
 		return err
 	}
+	for _, extra := range p.Extras {
+		caminho, err := Baixar(ctx, extra.URL, extra.SHA256, filepath.Dir(destino))
+		if err != nil {
+			os.RemoveAll(destino)
+			return err
+		}
+		err = extrair(caminho, destino)
+		os.Remove(caminho)
+		if err != nil {
+			os.RemoveAll(destino)
+			return err
+		}
+	}
 	return os.WriteFile(filepath.Join(destino, ".instalado"), []byte(p.SHA256+"\n"), 0o644)
+}
+
+// Baixar grava o arquivo em uma pasta e so o devolve se o hash for o esperado.
+func Baixar(ctx context.Context, url, esperado, pasta string) (string, error) {
+	tmp, err := os.CreateTemp(pasta, "baixando-*")
+	if err != nil {
+		return "", err
+	}
+	defer tmp.Close()
+	falhar := func(err error) (string, error) {
+		tmp.Close()
+		os.Remove(tmp.Name())
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return falhar(err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return falhar(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return falhar(fmt.Errorf("%s: resposta %s", url, resp.Status))
+	}
+	h := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(tmp, h), resp.Body); err != nil {
+		return falhar(err)
+	}
+	if obtido := hex.EncodeToString(h.Sum(nil)); !strings.EqualFold(obtido, esperado) {
+		return falhar(fmt.Errorf("%s: hash %s difere do esperado %s", url, obtido, esperado))
+	}
+	return tmp.Name(), tmp.Close()
 }
 
 func extrair(pacote, destino string) error {

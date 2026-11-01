@@ -23,19 +23,20 @@ import (
 const LimiteAchados = 500
 
 type dados struct {
-	Caso          caso.Info
-	Gerado        string
-	Resumo        caso.Resumo
-	Achados       []caso.Linha
-	AchadosFora   int64
-	Evidencias    []caso.Evidencia
-	Execucoes     []caso.Execucao
-	NaoExecutados []custodia.Entrada
-	Custodia      []custodia.Entrada
-	CustodiaOK    bool
-	CustodiaErro  string
-	HashFinal     string
-	Simbolo       template.URL
+	Caso           caso.Info
+	Gerado         string
+	Resumo         caso.Resumo
+	Achados        []caso.Linha
+	AchadosFora    int64
+	Evidencias     []caso.Evidencia
+	Execucoes      []caso.Execucao
+	NaoExecutados  []custodia.Entrada
+	Custodia       []custodia.Entrada
+	CustodiaOK     bool
+	CustodiaErro   string
+	HashFinal      string
+	NaoPreservados []custodia.Entrada
+	Simbolo        template.URL
 }
 
 // Gerar escreve o relatorio e registra na custodia o hash do documento gerado.
@@ -79,6 +80,9 @@ func Gerar(c *caso.Caso, w io.Writer) error {
 	for _, e := range d.Custodia {
 		if e.Acao == "modulo.nao_executado" {
 			d.NaoExecutados = append(d.NaoExecutados, e)
+		}
+		if e.Acao == "derivado.nao_preservado" {
+			d.NaoPreservados = append(d.NaoPreservados, e)
 		}
 	}
 	var html strings.Builder
@@ -169,6 +173,7 @@ th{font-weight:600}code{font:11px ui-monospace,Consolas,monospace;word-break:bre
 {{range .Execucoes}}<tr><td>{{.Titulo}}</td><td>{{.Modulo}} {{.Versao}}</td><td>{{.Estado}}{{if .Erro}}: {{.Erro}}{{end}}{{if and (eq .Estado "concluida") (eq .Registros 0)}}<br><span class="ruim">Sem resultado. Isso não prova ausência de atividade.</span>{{end}}</td><td>{{.Registros}}</td><td>{{.Inicio}}<br>{{.Fim}}</td><td><code>SHA-256 {{.FerramentaSHA256}}<br>{{unir .Args}}</code></td></tr>
 {{end}}</table>
 {{range .NaoExecutados}}<p class="ruim">Não executado: {{index .Detalhes "modulo"}}. Motivo: {{index .Detalhes "motivo"}}.</p>{{end}}
+{{range .NaoPreservados}}<p class="ruim">Arquivo extraído e não preservado: {{index .Detalhes "origem"}}. Motivo: {{index .Detalhes "erro"}}.</p>{{end}}
 
 <h2>Cadeia de custódia</h2>
 {{if .CustodiaOK}}<p class="ok">Encadeamento íntegro em {{len .Custodia}} registro(s).</p>{{else}}<p class="ruim">Encadeamento com problema: {{.CustodiaErro}}</p>{{end}}

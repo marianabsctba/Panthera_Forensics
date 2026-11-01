@@ -1,0 +1,30 @@
+contrato: 1
+nome: capa
+titulo: Capacidades de executáveis
+versao: "10.0.0"
+reconhece:
+  - tipo: executavel
+    magica_hex: "4d5a"
+consome: [executavel]
+# Cerca de 40 segundos por arquivo: inviavel para os executaveis extraidos de um disco.
+ignorar_derivados: true
+instalar:
+  windows-amd64:
+    url: https://github.com/mandiant/capa/releases/download/v10.0.0/capa-v10.0.0-windows.zip
+    sha256: 8712991044321dbb2a5b0d60f7a5327a50c9c30a295e7ddb5c1088cb17fb59df
+comando:
+  windows:
+    exec: capa.exe
+    stdout: capacidades.json
+    args: [-j, "{entrada}"]
+saida:
+  arquivos: capacidades.json
+  formato: json
+  itens: rules
+  descartar: [matches, source, pai]
+  mapas:
+    - tipo: evento
+      fonte: Capacidades
+      descricao: "{_chave} ({meta.namespace})"
+      entidades:
+        - {tipo: capacidade, valor: "{_chave}"}

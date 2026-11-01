@@ -15,8 +15,9 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Módulo Hindsight (Chrome e Firefox) | Testado com amostras do próprio projeto Hindsight |
 | Módulos Hayabusa, EvtxECmd e PECmd | Executados com amostras públicas reais, sem gabarito formal |
 | Módulos de memória (Volatility) | **Não validados**: não listam processos nas imagens do NIST, de 2005 e 2006 |
-| Busca no conteúdo dos arquivos, recuperação de apagados | Não feitas |
-| YARA, capa, Chainsaw, tshark, Zeek, Suricata, Plaso, bulk_extractor | Não feitos |
+| Módulos bulk_extractor, YARA, capa, Chainsaw, tshark, Zeek, Suricata e Plaso | Executados com dados públicos reais, ver [validação](validacao/README.md) |
+| Ambiente Linux dedicado (WSL) para tshark, Zeek, Suricata e Plaso | Instalado e em uso; a criação pelo `preparar` a partir do zero ainda não foi testada |
+| Recuperação do conteúdo de arquivos apagados | Não feita |
 | Coletor para a máquina-alvo | Não feito |
 
 ## Antivírus

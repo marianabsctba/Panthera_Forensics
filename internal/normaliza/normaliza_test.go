@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
@@ -75,6 +76,91 @@ func TestSQLiteEntregaTodasAsLinhas(t *testing.T) {
 	}
 	if len(r) != 2 || r[0].Descricao != "a 1" || r[0].Quando == "" || r[1].Quando != "" {
 		t.Fatalf("linhas erradas: %+v", r)
+	}
+}
+
+// Formato real do YARA-X: uma linha por arquivo, regras aninhadas e meta em pares.
+func TestItensAninhadosComParesEFaixas(t *testing.T) {
+	s := modulo.Saida{
+		Formato: "jsonl", Itens: "rules", Descartar: []string{"strings"},
+		Faixas: map[string]float64{"critica": 90, "alta": 70, "media": 50, "baixa": 0},
+		Mapas:  []modulo.Mapa{{Tipo: "alerta", Descricao: "{identifier}: {meta.description}", Severidade: "{meta.score}", OrigemArquivo: "{pai.path}"}},
+	}
+	r := coletar(t, s, `{"path":"a.exe","rules":[{"identifier":"R1","meta":[["description","d1"],["score",75]],"strings":[1]},{"identifier":"R2","meta":[["score",40]]}]}`+"\n"+`{"path":"b.exe","rules":[]}`+"\n")
+	if len(r) != 2 {
+		t.Fatalf("esperava 2 registros: %+v", r)
+	}
+	if r[0].Descricao != "R1: d1" || r[0].Severidade != "alta" || r[0].OrigemArquivo != "a.exe" {
+		t.Fatalf("mapeamento errado: %+v", r[0])
+	}
+	if r[1].Severidade != "baixa" {
+		t.Fatalf("faixa errada: %+v", r[1])
+	}
+	if _, tem := r[0].Dados["strings"]; tem {
+		t.Fatal("campo descartado continua nos dados")
+	}
+}
+
+// Formato real do capa: um documento, com regras em um objeto indexado pelo nome.
+func TestDocumentoJSONComObjeto(t *testing.T) {
+	s := modulo.Saida{Formato: "json", Itens: "rules", Mapas: []modulo.Mapa{{Tipo: "alerta", Descricao: "{_chave} em {meta.namespace}"}}}
+	r := coletar(t, s, `{"meta":{},"rules":{"b":{"meta":{"namespace":"n2"}},"a":{"meta":{"namespace":"n1"}}}}`)
+	if len(r) != 2 || r[0].Descricao != "a em n1" || r[1].Descricao != "b em n2" {
+		t.Fatalf("itens errados: %+v", r)
+	}
+}
+
+func TestTSVSemCabecalhoIgnoraComentarios(t *testing.T) {
+	s := modulo.Saida{Formato: "tsv", Colunas: []string{"local", "valor", "contexto"}, Mapas: []modulo.Mapa{{Tipo: "evento", Descricao: "{_arquivo}: {valor}", OrigemLocal: "{local}"}}}
+	caminho := filepath.Join(t.TempDir(), "email.txt")
+	if err := os.WriteFile(caminho, []byte("# comentario\n123\ta@b.c\tctx\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var r []Registro
+	if err := Ler(s, caminho, func(x Registro) error { r = append(r, x); return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(r) != 1 || r[0].Descricao != "email: a@b.c" || r[0].OrigemLocal != "123" {
+		t.Fatalf("linha errada: %+v", r)
+	}
+}
+
+func TestDatasDasFerramentasDeRede(t *testing.T) {
+	casos := map[string]string{
+		"1093620994.553915":               "2004-08-27T15:36:34",
+		"1093620994.553915000":            "2004-08-27T15:36:34",
+		"2016-07-13T19:42:07.388030-0300": "2016-07-13T22:42:07",
+	}
+	for bruto, esperado := range casos {
+		obtido, ok := interpretarData(bruto)
+		if !ok || !strings.HasPrefix(obtido, esperado) {
+			t.Errorf("%s: esperado %s, obtido %s", bruto, esperado, obtido)
+		}
+	}
+	if _, ok := interpretarData("12345"); ok {
+		t.Error("numero curto nao e data")
+	}
+	if q, _ := interpretarData("1093620994.656657934"); q != "2004-08-27T15:36:34.656657934Z" {
+		t.Errorf("precisao perdida: %s", q)
+	}
+	for _, zero := range []string{"1970-01-01T00:00:00.000000+0000", "1601-01-01 00:00:00.0000000", "0001-01-01T00:00:00Z"} {
+		if q, ok := interpretarData(zero); ok {
+			t.Errorf("marco zero aceito como data: %s vira %s", zero, q)
+		}
+	}
+	if d := limparDescricao("GET a () : "); d != "GET a" {
+		t.Errorf("descricao mal limpa: %q", d)
+	}
+}
+
+func TestDataEmMicrossegundos(t *testing.T) {
+	s := modulo.Saida{Formato: "jsonl", Mapas: []modulo.Mapa{{Tipo: "evento", Quando: "{t}", QuandoEscala: "microssegundos", Descricao: "x", ManterSemData: true}}}
+	r := coletar(t, s, `{"t":998076043000000}`+"\n"+`{"t":0}`+"\n")
+	if r[0].Quando != "2001-08-17T19:20:43.000000000Z" {
+		t.Fatalf("data errada: %s", r[0].Quando)
+	}
+	if r[1].Quando != "" {
+		t.Fatalf("marco zero aceito: %s", r[1].Quando)
 	}
 }
 

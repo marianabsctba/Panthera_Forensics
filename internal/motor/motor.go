@@ -17,8 +17,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/marianabsctba/Panthera_Forensics/internal/caso"
@@ -33,6 +35,8 @@ type Motor struct {
 	TempoMaximo    time.Duration
 	// Nucleo e o executavel usado por modulos com exec "{nucleo}". Vazio usa o atual.
 	Nucleo string
+
+	verificados sync.Map
 }
 
 // maximoRodadas limita a cadeia de derivados: uma evidencia que gera outra que gera
@@ -129,7 +133,11 @@ func (m *Motor) Planejar(c *caso.Caso) ([]Tarefa, Resultado, error) {
 	for _, md := range m.Modulos {
 		var entradas []caso.Evidencia
 		for _, tipo := range md.Consome {
-			entradas = append(entradas, porTipo[tipo]...)
+			for _, e := range porTipo[tipo] {
+				if !md.IgnorarDerivados || e.PaiID == nil {
+					entradas = append(entradas, e)
+				}
+			}
 		}
 		if len(entradas) == 0 {
 			continue
@@ -140,6 +148,12 @@ func (m *Motor) Planejar(c *caso.Caso) ([]Tarefa, Resultado, error) {
 		}
 		if md.Modo == "lote" {
 			tarefas = append(tarefas, Tarefa{Modulo: md, Entradas: unicas(entradas)})
+			continue
+		}
+		if md.Modo == "imagem" {
+			for _, grupo := range agruparSegmentos(unicas(entradas)) {
+				tarefas = append(tarefas, Tarefa{Modulo: md, Entradas: grupo})
+			}
 			continue
 		}
 		if md.Modo == "pasta" {
@@ -153,6 +167,43 @@ func (m *Motor) Planejar(c *caso.Caso) ([]Tarefa, Resultado, error) {
 		}
 	}
 	return tarefas, res, nil
+}
+
+var numeroVersao = regexp.MustCompile(`\d+\.\d+|version \d+`)
+
+var segmentoImagem = regexp.MustCompile(`(?i)^(.*)\.(e\d{2}|\d{3})$`)
+
+// agruparSegmentos junta as partes de uma mesma imagem, como disco.E01 e disco.E02. A
+// primeira parte vem primeiro, porque e por ela que as ferramentas abrem o conjunto.
+func agruparSegmentos(todas []caso.Evidencia) [][]caso.Evidencia {
+	porNome := map[string][]caso.Evidencia{}
+	var ordem []string
+	for _, e := range todas {
+		chave := strings.ToLower(e.Nome)
+		if m := segmentoImagem.FindStringSubmatch(e.Nome); m != nil {
+			chave = strings.ToLower(m[1]) + "|segmentos"
+		}
+		if _, existe := porNome[chave]; !existe {
+			ordem = append(ordem, chave)
+		}
+		porNome[chave] = append(porNome[chave], e)
+	}
+	grupos := make([][]caso.Evidencia, 0, len(ordem))
+	for _, chave := range ordem {
+		g := porNome[chave]
+		sort.Slice(g, func(i, j int) bool { return strings.ToLower(g[i].Nome) < strings.ToLower(g[j].Nome) })
+		grupos = append(grupos, g)
+	}
+	return grupos
+}
+
+// caminhoWSL converte D:\pasta em /mnt/d/pasta, para ferramentas no ambiente Linux.
+func caminhoWSL(caminho string) string {
+	limpo := filepath.ToSlash(caminho)
+	if len(limpo) >= 2 && limpo[1] == ':' {
+		return "/mnt/" + strings.ToLower(limpo[:1]) + limpo[2:]
+	}
+	return limpo
 }
 
 // mesmaPasta junta um arquivo aos que vieram da mesma pasta de origem, para ferramentas
@@ -281,6 +332,21 @@ func (m *Motor) localizar(md *modulo.Manifesto) (ferramenta, error) {
 	if !temPacote && md.Dir != "" {
 		dir = md.Dir
 	}
+	if cmd.Sistema {
+		exe, err := exec.LookPath(cmd.Exec)
+		if err != nil {
+			return ferramenta{}, err
+		}
+		if len(cmd.Verificar) > 0 {
+			if _, visto := m.verificados.Load(md.Nome); !visto {
+				if err := exec.Command(exe, cmd.Verificar...).Run(); err != nil {
+					return ferramenta{}, fmt.Errorf("%s indisponivel: %w", md.Nome, err)
+				}
+				m.verificados.Store(md.Nome, true)
+			}
+		}
+		return ferramenta{dir: dir, exec: exe}, nil
+	}
 	if cmd.Exec == "{nucleo}" {
 		if temPacote {
 			if _, err := os.Stat(filepath.Join(dir, ".instalado")); err != nil {
@@ -322,6 +388,35 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	if err != nil {
 		return false, err
 	}
+	versao := md.Versao
+	if len(comando.Versao) > 0 {
+		// Sem hash fixado, a versao real e o que identifica a ferramenta usada.
+		saida, err := exec.CommandContext(ctx, fer.exec, comando.Versao...).CombinedOutput()
+		if err != nil {
+			return false, fmt.Errorf("ao consultar a versao: %w", err)
+		}
+		// Avisos podem vir antes: vale a primeira linha com cara de numero de versao.
+		versao = ""
+		for _, linha := range strings.Split(string(saida), "\n") {
+			if numeroVersao.MatchString(linha) {
+				versao = strings.TrimSpace(linha)
+				break
+			}
+		}
+		if versao == "" {
+			return false, errors.New("versao da ferramenta nao identificada")
+		}
+		shaFerramenta += " " + versao
+	}
+	dirRegras := filepath.Join(filepath.Dir(m.DirFerramentas), "regras")
+	if slices.ContainsFunc(comando.Args, func(a string) bool { return strings.Contains(a, "{regras}") }) {
+		// Regra diferente e analise diferente: entra na identidade da tarefa e na custodia.
+		sha, err := hashPasta(filepath.Join(dirRegras, md.Nome))
+		if err != nil {
+			return false, err
+		}
+		shaFerramenta += " regras:" + sha
+	}
 	chave := chaveTarefa(md, shaFerramenta, comando, t.Entradas)
 	var existente int64
 	err = c.DB.QueryRow(`SELECT id FROM execucoes WHERE chave=? AND estado='concluida' LIMIT 1`, chave).Scan(&existente)
@@ -334,7 +429,7 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 
 	inicio := time.Now().UTC().Format(time.RFC3339)
 	res, err := c.DB.Exec(`INSERT INTO execucoes(chave,modulo,titulo,versao,ferramenta_sha256,args,estado,inicio) VALUES(?,?,?,?,?,?,?,?)`,
-		chave, md.Nome, md.Titulo, md.Versao, shaFerramenta, "[]", "rodando", inicio)
+		chave, md.Nome, md.Titulo, versao, shaFerramenta, "[]", "rodando", inicio)
 	if err != nil {
 		return false, err
 	}
@@ -350,6 +445,8 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	}
 	args := expandirArgs(comando.Args, map[string]string{
 		"{entrada}": entrada, "{saida}": dirSaida, "{ferramenta}": fer.dir,
+		"{regras}": dirRegras, "{regras_wsl}": caminhoWSL(dirRegras),
+		"{entrada_wsl}": caminhoWSL(entrada), "{saida_wsl}": caminhoWSL(dirSaida), "{ferramenta_wsl}": caminhoWSL(fer.dir),
 	})
 	argsJSON, _ := json.Marshal(args)
 	if _, err := c.DB.Exec(`UPDATE execucoes SET args=? WHERE id=?`, string(argsJSON), id); err != nil {
@@ -363,8 +460,24 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	if comando.Stdout != "" {
 		arquivoSaida = filepath.Join(dirSaida, filepath.Base(comando.Stdout))
 	}
+	parcial := ""
 	if err := m.rodar(ctx, fer.exec, args, dirTrabalho, arquivoSaida, filepath.Join(dirExec, "stderr.log")); err != nil {
-		return false, m.falhar(c, id, md, err)
+		if !comando.ParcialAceita || ctx.Err() != nil || !temSaida(md, dirSaida) {
+			return false, m.falhar(c, id, md, err)
+		}
+		parcial = "leitura parcial: " + ultimaLinha(filepath.Join(dirExec, "stderr.log"))
+	}
+	for _, padrao := range md.Saida.Derivar {
+		achados, err := filepath.Glob(filepath.Join(dirSaida, filepath.FromSlash(padrao)))
+		if err != nil {
+			return false, m.falhar(c, id, md, err)
+		}
+		for _, caminho := range achados {
+			nome := filepath.Base(caminho)
+			if err := guardarDerivado(c, caminho, nome, t.Entradas[0].Nome+"!"+md.Nome+"/"+nome, t.Entradas[0].ID); err != nil {
+				return false, m.falhar(c, id, md, fmt.Errorf("ao guardar arquivos extraidos: %w", err))
+			}
+		}
 	}
 	if md.Saida.Derivados != "" {
 		if err := guardarDerivados(c, filepath.Join(dirSaida, filepath.FromSlash(md.Saida.Derivados)), dirSaida, origens); err != nil {
@@ -376,7 +489,7 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 		return false, m.falhar(c, id, md, fmt.Errorf("ao ler a saida: %w", err))
 	}
 	fim := time.Now().UTC().Format(time.RFC3339)
-	if _, err := c.DB.Exec(`UPDATE execucoes SET estado='concluida',fim=?,registros=? WHERE id=?`, fim, n, id); err != nil {
+	if _, err := c.DB.Exec(`UPDATE execucoes SET estado='concluida',fim=?,registros=?,erro=? WHERE id=?`, fim, n, parcial, id); err != nil {
 		return false, err
 	}
 	shas := make([]string, 0, len(t.Entradas))
@@ -384,10 +497,37 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 		shas = append(shas, e.SHA256)
 	}
 	_, err = c.Custodia.Registrar("modulo.executado", map[string]any{
-		"execucao": id, "modulo": md.Nome, "versao": md.Versao, "ferramenta_sha256": shaFerramenta,
-		"args": args, "entradas": shas, "registros": n,
+		"execucao": id, "modulo": md.Nome, "versao": versao, "ferramenta_sha256": shaFerramenta,
+		"args": args, "entradas": shas, "registros": n, "parcial": parcial,
 	})
 	return false, err
+}
+
+// temSaida diz se a ferramenta chegou a escrever algum resultado.
+func temSaida(md *modulo.Manifesto, dirSaida string) bool {
+	achados, err := filepath.Glob(filepath.Join(dirSaida, filepath.FromSlash(md.Saida.Arquivos)))
+	if err != nil {
+		return false
+	}
+	for _, a := range achados {
+		if i, err := os.Stat(a); err == nil && i.Size() > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func ultimaLinha(caminho string) string {
+	dados, err := os.ReadFile(caminho)
+	if err != nil {
+		return "erro da ferramenta"
+	}
+	linhas := strings.Split(strings.TrimSpace(string(dados)), "\n")
+	linha := strings.TrimSpace(linhas[len(linhas)-1])
+	if len(linha) > 300 {
+		linha = linha[:300]
+	}
+	return linha
 }
 
 func (m *Motor) falhar(c *caso.Caso, id int64, md *modulo.Manifesto, causa error) error {
@@ -440,7 +580,7 @@ func prepararEntrada(c *caso.Caso, dir, modo string, entradas []caso.Evidencia) 
 	o := &origens{porCaminho: map[string]string{}, evidencias: map[string]caso.Evidencia{}}
 	for i, e := range entradas {
 		sub := filepath.Join(dir, fmt.Sprint(i))
-		if modo == "pasta" {
+		if modo == "pasta" || modo == "imagem" {
 			sub = dir
 		}
 		if err := os.MkdirAll(sub, 0o755); err != nil {
@@ -459,6 +599,9 @@ func prepararEntrada(c *caso.Caso, dir, modo string, entradas []caso.Evidencia) 
 	}
 	if modo == "lote" || modo == "pasta" {
 		return dir, o, nil
+	}
+	if modo == "imagem" {
+		return filepath.Join(dir, nomeSeguro(entradas[0].Nome)), o, nil
 	}
 	return ultimo, o, nil
 }
@@ -491,7 +634,14 @@ func guardarDerivados(c *caso.Caso, lista, dirSaida string, o *origens) error {
 			return fmt.Errorf("evidencia de origem desconhecida: %s", d.Evidencia)
 		}
 		if err := guardarDerivado(c, filepath.Join(dirSaida, relativo), d.Nome, pai.Nome+"!"+d.Origem, pai.ID); err != nil {
-			return err
+			// Um arquivo bloqueado pelo antivirus nao pode derrubar os demais. Ele fica
+			// registrado, porque um arquivo a menos muda o que o exame consegue afirmar.
+			if _, falha := c.Custodia.Registrar("derivado.nao_preservado", map[string]any{
+				"origem": d.Origem, "evidencia": pai.ID, "erro": caso.ExplicarAntivirus(err).Error(),
+			}); falha != nil {
+				return falha
+			}
+			continue
 		}
 	}
 	return leitor.Err()
@@ -570,6 +720,19 @@ func importar(c *caso.Caso, execucao int64, md *modulo.Manifesto, dirSaida strin
 	if len(arquivos) == 0 {
 		return 0, nil
 	}
+	if len(md.Saida.Somente) > 0 {
+		var escolhidos []string
+		for _, arquivo := range arquivos {
+			base := filepath.Base(arquivo)
+			base = strings.TrimSuffix(base, filepath.Ext(base))
+			for _, nome := range md.Saida.Somente {
+				if strings.EqualFold(base, nome) {
+					escolhidos = append(escolhidos, arquivo)
+				}
+			}
+		}
+		arquivos = escolhidos
+	}
 	sort.Strings(arquivos)
 	tx, err := c.DB.Begin()
 	if err != nil {
@@ -636,6 +799,25 @@ func importar(c *caso.Caso, execucao int64, md *modulo.Manifesto, dirSaida strin
 		}
 	}
 	return n, tx.Commit()
+}
+
+func hashPasta(pasta string) (string, error) {
+	itens, err := os.ReadDir(pasta)
+	if err != nil {
+		return "", err
+	}
+	h := sha256.New()
+	for _, item := range itens {
+		if item.IsDir() {
+			continue
+		}
+		sha, err := hashArquivo(filepath.Join(pasta, item.Name()))
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintln(h, item.Name(), sha)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func hashArquivo(caminho string) (string, error) {

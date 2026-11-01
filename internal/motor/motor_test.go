@@ -191,6 +191,44 @@ func TestBuscaAchaParteDoCaminhoEValoresTecnicos(t *testing.T) {
 	}
 }
 
+func TestAgruparSegmentosDeImagem(t *testing.T) {
+	grupos := agruparSegmentos([]caso.Evidencia{
+		{ID: 1, Nome: "disco.E02"}, {ID: 2, Nome: "disco.E01"}, {ID: 3, Nome: "outro.dd"},
+		{ID: 4, Nome: "parte.002"}, {ID: 5, Nome: "parte.001"},
+	})
+	if len(grupos) != 3 {
+		t.Fatalf("grupos errados: %+v", grupos)
+	}
+	if grupos[0][0].Nome != "disco.E01" || grupos[2][0].Nome != "parte.001" {
+		t.Fatalf("a primeira parte precisa vir primeiro: %+v", grupos)
+	}
+}
+
+func TestCaminhoWSL(t *testing.T) {
+	if c := caminhoWSL(`D:\Casos\a b\c.pcap`); c != "/mnt/d/Casos/a b/c.pcap" {
+		t.Fatalf("caminho errado: %s", c)
+	}
+}
+
+func TestIgnorarDerivados(t *testing.T) {
+	m, c := montar(t)
+	m.Modulos[0].IgnorarDerivados = true
+	direta, err := c.Adicionar(strings.NewReader("FAKE direta"), "a.bin", "teste/a.bin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.AdicionarDerivado(strings.NewReader("FAKE derivada"), "b.bin", "a.bin!b.bin", direta[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	tarefas, _, err := m.Planejar(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tarefas) != 1 || tarefas[0].Entradas[0].Nome != "a.bin" {
+		t.Fatalf("derivada nao deveria entrar: %+v", tarefas)
+	}
+}
+
 func TestMesmaPastaJuntaArquivosDaOrigem(t *testing.T) {
 	historico := caso.Evidencia{ID: 1, Nome: "History", Origem: `D:\perfil\Default\History`}
 	todas := []caso.Evidencia{

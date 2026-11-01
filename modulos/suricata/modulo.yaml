@@ -1,0 +1,39 @@
+contrato: 1
+nome: suricata
+titulo: Detecção em tráfego de rede
+versao: "wsl"
+requer_wsl: true
+reconhece:
+  - tipo: pcap
+    magica_hex: "d4c3b2a1"
+  - tipo: pcap
+    magica_hex: "a1b2c3d4"
+  - tipo: pcap
+    magica_hex: "0a0d0d0a"
+  - tipo: pcap
+    extensoes: [.pcap, .pcapng, .cap]
+consome: [pcap]
+comando:
+  windows:
+    exec: wsl.exe
+    sistema: true
+    verificar: [-d, panthera-forense, -u, root, -e, test, -x, /usr/bin/suricata]
+    versao: [-d, panthera-forense, -u, root, -e, suricata, -V]
+    args: [-d, panthera-forense, -u, root, -e, suricata, -r, "{entrada_wsl}", -l, "{saida_wsl}", -k, none, --runmode=single]
+saida:
+  arquivos: eve.json
+  formato: jsonl
+  # Escala da propria ferramenta: 1 e a mais grave.
+  severidades: {"1": alta, "2": media, "3": baixa, "4": info}
+  mapas:
+    - tipo: alerta
+      se: {event_type: alert}
+      quando: "{timestamp}"
+      fonte: "Rede: {alert.category}"
+      descricao: "{alert.signature}: {src_ip} para {dest_ip}"
+      severidade: "{alert.severity}"
+      origem_local: "pacote {pcap_cnt}, regra {alert.signature_id}"
+      entidades:
+        - {tipo: ip, valor: "{src_ip}"}
+        - {tipo: ip, valor: "{dest_ip}"}
+        - {tipo: regra, valor: "{alert.signature}"}

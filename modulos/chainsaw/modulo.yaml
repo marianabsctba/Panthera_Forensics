@@ -1,0 +1,33 @@
+contrato: 1
+nome: chainsaw
+titulo: Caça a ameaças em logs do Windows
+versao: "2.17.1"
+reconhece:
+  - tipo: evtx
+    magica_hex: "456c6646696c6500"
+    extensoes: [.evtx]
+consome: [evtx]
+modo: lote
+instalar:
+  windows-amd64:
+    url: https://github.com/WithSecureLabs/chainsaw/releases/download/v2.17.1/chainsaw_all_platforms+rules.zip
+    sha256: 74b9ea341e31c0a704a79c0e779c2f6e31670f1f43cad3b450b21a91639dbec3
+comando:
+  windows:
+    exec: chainsaw/chainsaw_x86_64-pc-windows-msvc.exe
+    dir: ferramenta
+    args: [hunt, "{entrada}", -s, chainsaw/sigma, -r, chainsaw/rules, --mapping, chainsaw/mappings/sigma-event-logs-all.yml, --jsonl, -o, "{saida}/achados.jsonl", -q, --skip-errors]
+saida:
+  arquivos: achados.jsonl
+  formato: jsonl
+  severidades: {critical: critica, high: alta, medium: media, low: baixa, info: info, informational: info}
+  mapas:
+    - tipo: alerta
+      quando: "{timestamp}"
+      fonte: "{document.data.Event.System.Channel}"
+      descricao: "{name}"
+      severidade: "{level}"
+      origem_arquivo: "{document.path}"
+      origem_local: "{document.data.Event.System.EventRecordID}"
+      entidades:
+        - {tipo: host, valor: "{document.data.Event.System.Computer}"}

@@ -232,6 +232,39 @@ func TestHackingCase(t *testing.T) {
 	t.Run("Q8 ultimo desligamento", func(t *testing.T) { registro(t, "ShutdownTime = 2004-08-27 15:46:33") })
 	t.Run("Q11 ultimo usuario", func(t *testing.T) { registro(t, "DefaultUserName = Mr. Evil") })
 
+	// Perguntas que dependem do conteudo do disco e do trafego achado nele.
+	t.Run("Q14 IP do computador", func(t *testing.T) { buscavel(t, "192.168.1.111") })
+	t.Run("Q17 e-mail SMTP", func(t *testing.T) { buscavel(t, "whoknowsme@sbcglobal.net") })
+	t.Run("Q24 sistema da vitima", func(t *testing.T) { buscavel(t, "Windows CE") })
+	t.Run("Q25 site acessado pela vitima", func(t *testing.T) { buscavel(t, "mobile.msn.com") })
+	t.Run("Q26 e-mail web", func(t *testing.T) { buscavel(t, "mrevilrulez@yahoo.com") })
+
+	t.Run("Primeira tela aponta ferramentas de ataque", func(t *testing.T) {
+		alertas, err := c.Consultar(caso.Filtro{Tipo: "alerta", Severidade: "media", Limite: 1000})
+		if err != nil {
+			t.Fatal(err)
+		}
+		achados := map[string]bool{}
+		for _, a := range alertas {
+			achados[strings.SplitN(a.OrigemArquivo, " ", 2)[0]] = true
+		}
+		for _, nome := range []string{"Cain.exe", "ethereal.exe", "NetStumbler.exe", "LookAtLan.exe", "123wasp.exe", "AnonymizerBar.dll"} {
+			if !achados[nome] {
+				t.Errorf("sem alerta para %s: %v", nome, achados)
+			}
+		}
+	})
+	t.Run("Plaso traz linha do tempo com datas", func(t *testing.T) {
+		var total, comData int
+		err := c.DB.QueryRow(`SELECT COUNT(*),COUNT(r.quando) FROM registros r JOIN execucoes e ON e.id=r.execucao_id WHERE e.modulo='plaso'`).Scan(&total, &comData)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if total == 0 || comData*10 < total*9 {
+			t.Errorf("registros: %d, com data: %d", total, comData)
+		}
+	})
+
 	t.Run("Q30 arquivos apagados no sistema de arquivos", func(t *testing.T) {
 		vistos := map[string]bool{}
 		for _, i := range itens {

@@ -12,16 +12,21 @@ PANTHERA_HOME=<pasta com ferramentas> PANTHERA_DADOS=<pasta de dados> go test -t
 |---|---|---|
 | DFR-01 NTFS, da imagem e da `$MFT` | Arquivo apagado, tamanho, datas e arquivos ativos | Passa |
 | DFR-16 NTFS, da imagem e da `$MFT` | Todos os nomes de arquivo ativos do gabarito aparecem | Passa |
-| Hacking Case | 15 das 31 perguntas, listadas abaixo | Passa nas 15; Q30 diverge; as demais não foram testadas |
+| Hacking Case | 20 das 31 perguntas, listadas abaixo | Passa nas 20; Q30 diverge; as demais não foram testadas |
 | Navegadores (amostras do Hindsight) | Chrome com 63 itens, Firefox com 6, sem perda | Passa |
+| Rede (amostra do projeto Suricata) | Regra 2100498 esperada, fuso convertido, conexão registrada | Passa |
+| Logs do Windows com Chainsaw (amostra pública) | Alerta crítico em um log que foi limpo | Passa |
+| Arquivo limpo (`notepad.exe`) | Sem alerta de assinatura; capacidades descritas | Passa |
+| Nome de arquivo malicioso | Nenhum comando executado; captura cortada marcada como parcial | Passa |
 | Memória boomer-win2003 | Processos documentados pelo NIST, como o Notepad | **Não passa** |
 
 ### Hacking Case
 
-- **Passam:** Q1 hash, Q2 sistema, Q3 instalação, Q4 fuso, Q5 dono, Q6 computador, Q8 desligamento, Q9 contas, Q11 último usuário, Q12 arquivo do Look@LAN, Q16 programas, Q22 canais de IRC, Q23 arquivo interceptado, Q27 cópia de e-mail e Q28 executáveis na lixeira.
+- **Passam:** Q1 hash, Q2 sistema, Q3 instalação, Q4 fuso, Q5 dono, Q6 computador, Q8 desligamento, Q9 contas, Q11 último usuário, Q12 arquivo do Look@LAN, Q14 IP, Q16 programas, Q17 e-mail SMTP, Q22 canais de IRC, Q23 arquivo interceptado, Q24 sistema da vítima, Q25 site acessado, Q26 e-mail web, Q27 cópia de e-mail e Q28 executáveis na lixeira.
 - **Diverge:** na Q30, o gabarito diz 3 arquivos apagados, e o The Sleuth Kit lista 70 entradas apagadas com metadados. A causa não foi confirmada, e o número não foi ajustado.
-- **Não testadas:** Q7, Q10, Q13 a Q15, Q17 a Q21, Q24 a Q26, Q29 e Q31. A maioria depende de ler o conteúdo dos arquivos, e a Q31 depende de antivírus.
-- **Alcance:** Q12, Q16, Q22, Q23 e Q27 confirmam que os arquivos aparecem na listagem, e a busca da tela encontra os nomes testados. Como o teste já sabe o que procurar, isso não demonstra que um exame sem o gabarito chegaria a eles. A Q12 pede uma busca no conteúdo dos arquivos, que ainda não existe.
+- **Não testadas:** Q7, Q10, Q13, Q15, Q18 a Q21, Q29 e Q31.
+- **Alcance:** Q12, Q14, Q16, Q17, Q22 a Q27 confirmam que a informação existe no caso e que a busca a encontra. Como o teste já sabe o que procurar, isso não demonstra que um exame sem o gabarito chegaria a ela.
+- **Calibração:** as regras próprias de uso duplo foram ajustadas vendo este caso. Não houve alarme falso em nenhum `.exe` ou `.dll` da pasta `System32` desta máquina (sem subpastas), mas a taxa de acerto em casos desconhecidos não foi medida.
 
 ### Memória
 
@@ -48,4 +53,7 @@ Em `PANTHERA_DADOS`:
 - `nist-dfr/dfr-01-ntfs.dd` e `nist-dfr/dfr-16-ntfs.dd`: [imagem 01](https://cfreds-archive.nist.gov/dfr-images/dfr-01-ntfs.dd.bz2) e [imagem 16](https://cfreds-archive.nist.gov/dfr-images/dfr-16-ntfs.dd.bz2), descomprimidas.
 - `nist-dfr/mft-01/p61/$MFT` e `nist-dfr/mft-16/p128/$MFT`: `$MFT` extraída dessas imagens por um script auxiliar.
 - `hacking/4Dell Latitude CPi.E01` e `.E02`: [Hacking Case](https://cfreds-archive.nist.gov/Hacking_Case.html).
+- `pcap/testmyids.pcap`: `tests/alert-testmyids-async/input.pcap` do [suricata-verify](https://github.com/OISF/suricata-verify).
+- `pcap/hacking-packets.pcap`: pacotes que o bulk_extractor encontra no disco do Hacking Case.
+- `hayabusa-sample-evtx`: clone de [hayabusa-sample-evtx](https://github.com/Yamato-Security/hayabusa-sample-evtx).
 - `hindsight/chrome/History` e `hindsight/firefox/places.sqlite`: `tests/fixtures/profiles/60/History` e `tests/fixtures/firefox/places.sqlite` do [Hindsight](https://github.com/obsidianforensics/hindsight).

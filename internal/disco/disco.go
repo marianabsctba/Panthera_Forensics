@@ -111,6 +111,8 @@ var artefatos = regexp.MustCompile(`(?i)(` +
 	`/windows/(system32/winevt/logs/[^/]+\.evtx|prefetch/[^/]+\.pf|system32/config/(software|system|sam|security))` +
 	`|/(documents and settings|users)/[^/]+/ntuser\.dat` +
 	`|/(google/chrome|microsoft/edge|bravesoftware/brave-browser)/user data/[^/]+/(history|cookies|web data|bookmarks|preferences|favicons|top sites)` +
+	// Executaveis fora da pasta do Windows, onde programas instalados pelo usuario ficam.
+	`|/(program files[^/]*|documents and settings|users|recycler|\$recycle\.bin|temp)/.+\.(exe|dll|scr|sys)` +
 	`)$`)
 
 // registro segue o formato "contrato" dos modulos.
@@ -383,7 +385,16 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 	}
 	for _, e := range nomes {
 		if err := t.extrair(segmentos, p, e); err != nil {
-			return false, fmt.Errorf("ao extrair %s: %w", e.Caminho, err)
+			// Um arquivo que nao sai, por antivirus ou dano no disco, nao pode impedir os
+			// outros. Ele vira um registro visivel na timeline.
+			if err := t.registros.Encode(registro{
+				Tipo: "evento", Fonte: "Imagem de disco",
+				Descricao:   "Arquivo não extraído: " + e.Caminho + " (" + err.Error() + ")",
+				OrigemLocal: fmt.Sprintf("partição no setor %d, inode %s", p.Inicio, e.Inode),
+				Dados:       map[string]any{"caminho": e.Caminho, "erro": err.Error()},
+			}); err != nil {
+				return false, err
+			}
 		}
 	}
 	return true, nil

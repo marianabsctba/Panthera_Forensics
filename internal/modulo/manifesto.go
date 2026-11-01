@@ -32,6 +32,11 @@ type Manifesto struct {
 	Instalar   map[string]Pacote  `yaml:"instalar"`
 	Comando    map[string]Comando `yaml:"comando"`
 	Saida      Saida              `yaml:"saida"`
+	// IgnorarDerivados limita o modulo ao que foi entregue diretamente, para ferramentas
+	// lentas demais para os milhares de arquivos extraidos de um disco.
+	IgnorarDerivados bool `yaml:"ignorar_derivados"`
+	// RequerWSL indica que a ferramenta roda no ambiente Linux dedicado.
+	RequerWSL bool `yaml:"requer_wsl"`
 
 	// Dir e a pasta do manifesto, quando ele vem do disco.
 	Dir string `yaml:"-"`
@@ -52,6 +57,8 @@ type Pacote struct {
 	SHA256 string `yaml:"sha256"`
 	// Arquivo indica que o download e o proprio executavel, com este nome.
 	Arquivo string `yaml:"arquivo"`
+	// Extras sao pacotes abertos na mesma pasta, como um conjunto de regras.
+	Extras []Pacote `yaml:"extras"`
 }
 
 // Comando e a linha de execucao, com marcadores como {entrada} e {saida}. Dir
@@ -62,6 +69,16 @@ type Comando struct {
 	Stdout string   `yaml:"stdout"`
 	Exec   string   `yaml:"exec"`
 	Args   []string `yaml:"args"`
+	// Sistema indica que Exec vem do sistema, e nao de uma ferramenta instalada aqui.
+	Sistema bool `yaml:"sistema"`
+	// ParcialAceita aproveita o que a ferramenta escreveu antes de um erro, como em uma
+	// captura de rede cortada no meio de um pacote. O resultado fica marcado como parcial.
+	ParcialAceita bool `yaml:"parcial_aceita"`
+	// Verificar sao os argumentos de um teste de que a ferramenta esta disponivel.
+	Verificar []string `yaml:"verificar"`
+	// Versao sao os argumentos que imprimem a versao real, registrada na custodia. Serve
+	// para ferramentas sem hash fixado, como as instaladas por um gerenciador de pacotes.
+	Versao []string `yaml:"versao"`
 }
 
 // Saida descreve como transformar o que a ferramenta escreve em registros.
@@ -71,14 +88,29 @@ type Saida struct {
 	// Derivados aponta para um JSONL com arquivos extraidos, que viram novas evidencias.
 	Derivados string `yaml:"derivados"`
 	// Tabela e a tabela lida quando o formato e sqlite.
-	Tabela      string            `yaml:"tabela"`
-	Severidades map[string]string `yaml:"severidades"`
-	Mapas       []Mapa            `yaml:"mapas"`
+	Tabela string `yaml:"tabela"`
+	// Somente limita a leitura a estes nomes de arquivo, sem extensao.
+	Somente []string `yaml:"somente"`
+	// Derivar lista arquivos da saida que viram novas evidencias, sem precisar de lista.
+	Derivar []string `yaml:"derivar"`
+	// Itens aponta para uma lista ou objeto dentro de cada linha, com um registro por item.
+	Itens string `yaml:"itens"`
+	// Colunas nomeia os campos do formato tsv, que nao tem cabecalho.
+	Colunas []string `yaml:"colunas"`
+	// Descartar tira campos enormes dos dados de cada registro. A saida bruta continua
+	// preservada na pasta da execucao.
+	Descartar []string `yaml:"descartar"`
+	// Faixas converte uma pontuacao em gravidade, pelo valor minimo de cada uma.
+	Faixas      map[string]float64 `yaml:"faixas"`
+	Severidades map[string]string  `yaml:"severidades"`
+	Mapas       []Mapa             `yaml:"mapas"`
 }
 
 // Mapa gera um registro por linha de saida. Um mesmo arquivo pode ter varios,
 // como uma linha da MFT que traz quatro datas diferentes.
 type Mapa struct {
+	// QuandoEscala declara a unidade de uma data numerica: "microssegundos" desde 1970.
+	QuandoEscala string `yaml:"quando_escala"`
 	// Se limita o mapa as linhas em que estas colunas tem estes valores.
 	Se map[string]string `yaml:"se"`
 	// ManterSemData preserva a linha mesmo sem data: um processo sem hora de inicio
@@ -137,7 +169,7 @@ func (m *Manifesto) validar() error {
 	switch m.Modo {
 	case "":
 		m.Modo = "arquivo"
-	case "arquivo", "lote", "pasta":
+	case "arquivo", "lote", "pasta", "imagem":
 	default:
 		return fmt.Errorf("%s: modo %q desconhecido", m.Nome, m.Modo)
 	}
@@ -149,7 +181,10 @@ func (m *Manifesto) validar() error {
 	}
 	switch m.Saida.Formato {
 	case "contrato":
-	case "csv", "jsonl", "sqlite":
+	case "csv", "jsonl", "json", "tsv", "sqlite":
+		if m.Saida.Formato == "tsv" && len(m.Saida.Colunas) == 0 {
+			return fmt.Errorf("%s: formato tsv exige colunas", m.Nome)
+		}
 		if len(m.Saida.Mapas) == 0 {
 			return fmt.Errorf("%s: formato %s exige mapas", m.Nome, m.Saida.Formato)
 		}

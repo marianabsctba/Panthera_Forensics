@@ -1,0 +1,86 @@
+contrato: 1
+nome: zeek
+titulo: Conexões e protocolos de rede
+versao: "wsl"
+requer_wsl: true
+reconhece:
+  - tipo: pcap
+    magica_hex: "d4c3b2a1"
+  - tipo: pcap
+    magica_hex: "a1b2c3d4"
+  - tipo: pcap
+    magica_hex: "0a0d0d0a"
+  - tipo: pcap
+    extensoes: [.pcap, .pcapng, .cap]
+consome: [pcap]
+comando:
+  windows:
+    exec: wsl.exe
+    sistema: true
+    parcial_aceita: true
+    verificar: [-d, panthera-forense, -u, root, -e, test, -x, /opt/zeek/bin/zeek]
+    versao: [-d, panthera-forense, -u, root, -e, /opt/zeek/bin/zeek, --version]
+    # Caminhos entram como argumentos do bash, e nunca no texto do script: o nome de uma
+    # evidencia nao e confiavel. O -C aceita capturas com checksum errado, comuns em
+    # pacotes recuperados de um disco.
+    args: [-d, panthera-forense, -u, root, -e, bash, -c, 'cd "$2" && exec /opt/zeek/bin/zeek -C -r "$1" LogAscii::use_json=T', _, "{entrada_wsl}", "{saida_wsl}"]
+saida:
+  arquivos: "*.log"
+  somente: [conn, http, dns, ssl, ftp, smtp, notice]
+  formato: jsonl
+  mapas:
+    - tipo: evento
+      se: {_arquivo: conn}
+      quando: "{ts}"
+      fonte: "Rede: conexão"
+      descricao: "{id.orig_h}:{id.orig_p} para {id.resp_h}:{id.resp_p} {service} ({orig_bytes} bytes enviados, {resp_bytes} recebidos)"
+      origem_local: "{uid}"
+      entidades:
+        - {tipo: ip, valor: "{id.orig_h}"}
+        - {tipo: ip, valor: "{id.resp_h}"}
+    - tipo: evento
+      se: {_arquivo: http}
+      quando: "{ts}"
+      fonte: "Rede: HTTP"
+      descricao: "{method} {host}{uri} ({user_agent})"
+      origem_local: "{uid}"
+      entidades:
+        - {tipo: ip, valor: "{id.orig_h}"}
+        - {tipo: dominio, valor: "{host}"}
+    - tipo: evento
+      se: {_arquivo: dns}
+      quando: "{ts}"
+      fonte: "Rede: DNS"
+      descricao: "Consulta a {query}: {answers}"
+      origem_local: "{uid}"
+      entidades:
+        - {tipo: dominio, valor: "{query}"}
+    - tipo: evento
+      se: {_arquivo: ssl}
+      quando: "{ts}"
+      fonte: "Rede: TLS"
+      descricao: "{id.orig_h} para {server_name} ({version})"
+      origem_local: "{uid}"
+      entidades:
+        - {tipo: dominio, valor: "{server_name}"}
+    - tipo: evento
+      se: {_arquivo: ftp}
+      quando: "{ts}"
+      fonte: "Rede: FTP"
+      descricao: "{user} em {id.resp_h}: {command} {arg}"
+      origem_local: "{uid}"
+      entidades:
+        - {tipo: ip, valor: "{id.resp_h}"}
+    - tipo: evento
+      se: {_arquivo: smtp}
+      quando: "{ts}"
+      fonte: "Rede: e-mail"
+      descricao: "De {mailfrom} para {rcptto}: {subject}"
+      origem_local: "{uid}"
+    - tipo: alerta
+      se: {_arquivo: notice}
+      quando: "{ts}"
+      fonte: "Rede: aviso"
+      descricao: "{note}: {msg}"
+      severidade: media
+      origem_local: "{uid}"
