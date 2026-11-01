@@ -50,6 +50,25 @@ func TestEscritaExigeToken(t *testing.T) {
 	}
 }
 
+func TestEncerrarExigeTokenERespeitaAnalise(t *testing.T) {
+	s, h := montar(t)
+	host := "127.0.0.1:7878"
+	chamado := make(chan bool, 1)
+	s.AoEncerrar = func() { chamado <- true }
+	if w := pedir(h, "POST", "/api/encerrar", host, "", ""); w.Code != http.StatusForbidden {
+		t.Fatalf("sem token aceito: %d", w.Code)
+	}
+	s.estados["x"] = &Estado{Rodando: true}
+	if w := pedir(h, "POST", "/api/encerrar", host, s.token, ""); w.Code != http.StatusConflict {
+		t.Fatalf("encerrou durante a analise: %d", w.Code)
+	}
+	delete(s.estados, "x")
+	if w := pedir(h, "POST", "/api/encerrar", host, s.token, ""); w.Code != http.StatusOK {
+		t.Fatalf("encerrar: %d", w.Code)
+	}
+	<-chamado
+}
+
 func TestIdDeCasoNaoEscapaDaPasta(t *testing.T) {
 	_, h := montar(t)
 	w := pedir(h, "GET", "/api/casos/..%2F..%2Fwindows/resumo", "127.0.0.1:7878", "", "")

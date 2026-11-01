@@ -20,6 +20,7 @@ label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 12p
 label input { margin-top: 4px; color: var(--texto); }
 
 header { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: var(--painel); border-bottom: 1px solid var(--linha); flex-wrap: wrap; }
+.encerrar { order: 3; margin-left: auto; font-size: 13px; padding: 5px 12px; }
 .marca { font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
 .marca:hover { color: var(--marca); }
 .marca img { width: 34px; height: 34px; border-radius: 7px; }
@@ -115,6 +116,8 @@ h3 { font-size: 12px; font-weight: 600; color: var(--suave); margin: 0 0 6px; }
 .lista-alertas .link { overflow-wrap: anywhere; }
 .blocos { display: grid; gap: 14px; }
 .marcacao { margin: 16px 0; display: grid; gap: 8px; }
+.conteudo { margin-bottom: 16px; }
+.arquivo pre { max-height: 360px; overflow-y: auto; }
 .marcacao-acoes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .mapa-area { width: 100%; overflow-x: auto; }
 .mapa-dica { margin-bottom: 6px; }

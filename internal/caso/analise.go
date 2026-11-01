@@ -366,6 +366,21 @@ func (c *Caso) Marcacoes() ([]Marcacao, error) {
 	return todas, linhas.Err()
 }
 
+// RegistroDoCaminho acha o registro da leitura de disco de um arquivo. O caminho vem como
+// /imagem/volume/resto, e o registro guarda so /resto, entao o final e o que precisa bater.
+func (c *Caso) RegistroDoCaminho(caminho string) (int64, error) {
+	partes := strings.Split(strings.Trim(caminho, "/"), "/")
+	if len(partes) < 3 {
+		return 0, sql.ErrNoRows
+	}
+	resto := "/" + strings.Join(partes[2:], "/")
+	var id int64
+	// O sinal % e o _ dentro do caminho sao literais aqui.
+	padrao := `%"caminho":"` + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(resto) + `"%`
+	err := c.DB.QueryRow(`SELECT id FROM registros WHERE fonte='Sistema de arquivos' AND dados LIKE ? ESCAPE '\' AND dados NOT LIKE '%"residual":true%' LIMIT 1`, padrao).Scan(&id)
+	return id, err
+}
+
 // NotaDe devolve a marcacao de um registro.
 func (c *Caso) NotaDe(id int64) (marcado bool, nota string, err error) {
 	err = c.DB.QueryRow(`SELECT nota FROM marcacoes WHERE registro_id=?`, id).Scan(&nota)

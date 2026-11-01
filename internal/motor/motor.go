@@ -26,6 +26,7 @@ import (
 	"github.com/marianabsctba/Panthera_Forensics/internal/caso"
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
 	"github.com/marianabsctba/Panthera_Forensics/internal/normaliza"
+	"github.com/marianabsctba/Panthera_Forensics/internal/processo"
 )
 
 // Motor executa modulos sobre casos.
@@ -354,7 +355,7 @@ func (m *Motor) localizar(md *modulo.Manifesto) (ferramenta, error) {
 		}
 		if len(cmd.Verificar) > 0 {
 			if _, visto := m.verificados.Load(md.Nome); !visto {
-				if err := exec.Command(exe, cmd.Verificar...).Run(); err != nil {
+				if err := processo.Ocultar(exec.Command(exe, cmd.Verificar...)).Run(); err != nil {
 					return ferramenta{}, fmt.Errorf("%s indisponivel: %w", md.Nome, err)
 				}
 				m.verificados.Store(md.Nome, true)
@@ -406,7 +407,7 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	versao := md.Versao
 	if len(comando.Versao) > 0 {
 		// Sem hash fixado, a versao real e o que identifica a ferramenta usada.
-		saida, err := exec.CommandContext(ctx, fer.exec, comando.Versao...).CombinedOutput()
+		saida, err := processo.Ocultar(exec.CommandContext(ctx, fer.exec, comando.Versao...)).CombinedOutput()
 		if err != nil {
 			return false, fmt.Errorf("ao consultar a versao: %w", err)
 		}
@@ -577,7 +578,7 @@ func (m *Motor) rodar(ctx context.Context, executavel string, args []string, dir
 		return err
 	}
 	defer erros.Close()
-	cmd := exec.CommandContext(ctx, executavel, args...)
+	cmd := processo.Ocultar(exec.CommandContext(ctx, executavel, args...))
 	cmd.Dir = dirTrabalho
 	cmd.Stdout, cmd.Stderr = saida, erros
 	if err := cmd.Run(); err != nil {

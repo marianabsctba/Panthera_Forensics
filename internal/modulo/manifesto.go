@@ -39,8 +39,8 @@ type Manifesto struct {
 	RequerWSL bool `yaml:"requer_wsl"`
 	// Opcional deixa o modulo fora da analise padrao: so roda no exame profundo.
 	Opcional bool `yaml:"opcional"`
-	// Abrir aponta para um programa de analise que a ferramenta deixa na pasta de saida.
-	Abrir string `yaml:"abrir"`
+	// Consulta busca no indice que a ferramenta deixou na saida, sem abrir sua interface.
+	Consulta *Comando `yaml:"consulta"`
 
 	// Dir e a pasta do manifesto, quando ele vem do disco.
 	Dir string `yaml:"-"`
@@ -119,6 +119,8 @@ type Mapa struct {
 	QuandoEscala string `yaml:"quando_escala"`
 	// Se limita o mapa as linhas em que estas colunas tem estes valores.
 	Se map[string]string `yaml:"se"`
+	// SeNao descarta as linhas em que estas colunas tem estes valores.
+	SeNao map[string]string `yaml:"se_nao"`
 	// ManterSemData preserva a linha mesmo sem data: um processo sem hora de inicio
 	// ainda e um achado, ao contrario de uma das quatro datas vazias da MFT.
 	ManterSemData bool           `yaml:"manter_sem_data"`

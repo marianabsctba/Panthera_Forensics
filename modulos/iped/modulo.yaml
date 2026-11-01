@@ -21,8 +21,10 @@ comando:
     # UTC fixo: no fuso local, as datas saem com abreviacoes ambiguas, como BRST. Sem
     # --downloadInternetData, de proposito: o exame nao pode fazer contato externo.
     args: [-Duser.timezone=UTC, -Duser.language=en, -jar, "{ferramenta}/iped-4.3.1/iped.jar", -d, "{entrada}", -o, "{saida}/exame", --nogui, --nologfile]
-# Programa de analise que a propria ferramenta deixa pronto na saida.
-abrir: exame/IPED-SearchApp.exe
+# A busca no conteudo roda sem abrir a interface da ferramenta: tudo aparece na nossa tela.
+consulta:
+  exec: iped-4.3.1/jre/bin/java.exe
+  args: [-Dnashorn.args=--no-deprecation-warning, -cp, "{ferramenta}/iped-4.3.1/lib/lucene-core-9.2.0.jar", jdk.nashorn.tools.Shell, -scripting, "{regras}/iped/consulta.js", --, "{saida}/exame/iped/index", "{limite}", "{termos}"]
 saida:
   arquivos: exame/FileList.csv
   formato: csv
@@ -35,8 +37,18 @@ saida:
       origem_local: "{TrackId}"
       entidades:
         - {tipo: arquivo, valor: "{Name}"}
+    # Tamanho zero e marcado como apagado costuma ser so um nome que sobrou no diretorio: no
+    # DFR-01 do NIST, isso aparece para um arquivo que continua ativo.
+    - tipo: evento
+      se: {Deleted: "true", Size: "0"}
+      manter_sem_data: true
+      quando: "{Modified}"
+      fonte: "Exame profundo: nomes residuais"
+      descricao: "Nome residual ou arquivo vazio, não confirma exclusão: {Path}"
+      origem_local: "{TrackId}"
     - tipo: evento
       se: {Deleted: "true"}
+      se_nao: {Size: "0"}
       manter_sem_data: true
       quando: "{Modified}"
       fonte: "Exame profundo: apagados"

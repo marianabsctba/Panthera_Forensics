@@ -5,6 +5,7 @@ package web
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
 	"encoding/hex"
@@ -15,7 +16,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/marianabsctba/Panthera_Forensics/internal/caso"
+	"github.com/marianabsctba/Panthera_Forensics/internal/disco"
 	"github.com/marianabsctba/Panthera_Forensics/internal/instalador"
 	"github.com/marianabsctba/Panthera_Forensics/internal/marca"
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
@@ -50,8 +51,10 @@ type Estado struct {
 type Servidor struct {
 	DirCasos string
 	Motor    *motor.Motor
-	token    string
-	host     string
+	// AoEncerrar e chamado quando a pessoa pede para fechar o programa.
+	AoEncerrar func()
+	token      string
+	host       string
 
 	mu         sync.Mutex
 	abertos    map[string]*caso.Caso
@@ -97,6 +100,7 @@ func (s *Servidor) Handler(endereco string) http.Handler {
 	mux.HandleFunc("POST /api/casos", s.criarCaso)
 	mux.HandleFunc("GET /api/modulos", s.listarModulos)
 	mux.HandleFunc("POST /api/modulos/instalar", s.instalarModulos)
+	mux.HandleFunc("POST /api/encerrar", s.encerrar)
 	mux.HandleFunc("GET /api/casos/{id}/resumo", s.comCaso(s.resumo))
 	mux.HandleFunc("GET /api/casos/{id}/registros", s.comCaso(s.registros))
 	mux.HandleFunc("GET /api/casos/{id}/registros/{rid}", s.comCaso(s.detalhe))
@@ -110,7 +114,10 @@ func (s *Servidor) Handler(endereco string) http.Handler {
 	mux.HandleFunc("POST /api/casos/{id}/evidencias", s.comCaso(s.enviarEvidencia))
 	mux.HandleFunc("POST /api/casos/{id}/processar", s.comCaso(s.processar))
 	mux.HandleFunc("GET /api/casos/{id}/aprofundar", s.comCaso(s.aprofundar))
-	mux.HandleFunc("POST /api/casos/{id}/abrir-analise", s.comCaso(s.abrirAnalise))
+	mux.HandleFunc("GET /api/casos/{id}/conteudo", s.comCaso(s.buscaConteudo))
+	mux.HandleFunc("GET /api/casos/{id}/caminho", s.comCaso(s.registroDoCaminho))
+	mux.HandleFunc("GET /api/casos/{id}/registros/{rid}/arquivo", s.comCaso(s.verArquivo))
+	mux.HandleFunc("GET /casos/{id}/registros/{rid}/copia", s.comCaso(s.copiaArquivo))
 	mux.HandleFunc("GET /api/casos/{id}/estado", s.comCaso(s.estado))
 	mux.HandleFunc("POST /api/casos/{id}/verificar", s.comCaso(s.verificar))
 	mux.HandleFunc("GET /casos/{id}/relatorio", s.comCaso(s.relatorio))
@@ -191,6 +198,27 @@ func (s *Servidor) comCaso(h func(http.ResponseWriter, *http.Request, *caso.Caso
 			s.mu.Unlock()
 		}
 		h(w, r, c)
+	}
+}
+
+// encerrar fecha o programa, que nao tem janela propria. Recusa enquanto algo roda, para
+// nao interromper uma analise no meio.
+func (s *Servidor) encerrar(w http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.instalando {
+		falhar(w, http.StatusConflict, "Aguarde: a preparação ainda está em andamento.")
+		return
+	}
+	for _, e := range s.estados {
+		if e.Rodando {
+			falhar(w, http.StatusConflict, "Aguarde: há uma análise em andamento.")
+			return
+		}
+	}
+	responder(w, map[string]bool{"ok": true})
+	if s.AoEncerrar != nil {
+		go s.AoEncerrar()
 	}
 }
 
@@ -582,52 +610,80 @@ func (s *Servidor) aprofundar(w http.ResponseWriter, _ *http.Request, c *caso.Ca
 			aplicavel = aplicavel || slices.ContainsFunc(m.Consome, func(t string) bool { return tipos[t] })
 		}
 	}
-	_, pronto := s.programaAnalise(c)
-	responder(w, map[string]bool{"aplicavel": aplicavel, "pronto": pronto})
+	responder(w, map[string]bool{"aplicavel": aplicavel, "pronto": s.Motor.ExameFeito(c)})
 }
 
-// programaAnalise procura o programa deixado por um modulo na pasta da execucao. O
-// caminho vem do manifesto e do numero da execucao, e nunca do pedido.
-func (s *Servidor) programaAnalise(c *caso.Caso) (string, bool) {
-	execucoes, err := c.Execucoes()
+// buscaConteudo procura no indice do exame profundo. Sem exame feito, nao e erro: so nao
+// ha o que mostrar.
+func (s *Servidor) buscaConteudo(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" || !s.Motor.ExameFeito(c) {
+		responder(w, motor.ResultadoConteudo{Achados: []motor.AchadoConteudo{}})
+		return
+	}
+	res, err := s.Motor.BuscarConteudo(r.Context(), c, q, 100)
 	if err != nil {
-		return "", false
+		falhar(w, http.StatusInternalServerError, "A busca no exame profundo falhou: "+err.Error())
+		return
 	}
-	for i := len(execucoes) - 1; i >= 0; i-- {
-		x := execucoes[i]
-		if x.Estado != "concluida" {
-			continue
-		}
-		for _, m := range s.Motor.Modulos {
-			if m.Nome == x.Modulo && m.Abrir != "" {
-				caminho := filepath.Join(c.Dir, "execucoes", strconv.FormatInt(x.ID, 10), "saida", filepath.FromSlash(m.Abrir))
-				if _, err := os.Stat(caminho); err == nil {
-					return caminho, true
-				}
-			}
-		}
-	}
-	return "", false
+	responder(w, res)
 }
 
-func (s *Servidor) abrirAnalise(w http.ResponseWriter, _ *http.Request, c *caso.Caso) {
-	caminho, ok := s.programaAnalise(c)
-	if !ok {
-		falhar(w, http.StatusNotFound, "O exame profundo ainda não foi feito neste caso.")
+func (s *Servidor) registroDoCaminho(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	id, err := c.RegistroDoCaminho(r.URL.Query().Get("caminho"))
+	if err != nil {
+		falhar(w, http.StatusNotFound, "Este item fica dentro de outro arquivo e ainda não pode ser aberto aqui.")
 		return
 	}
-	cmd := exec.Command(caminho)
-	cmd.Dir = filepath.Dir(caminho)
-	if err := cmd.Start(); err != nil {
-		falhar(w, http.StatusInternalServerError, "Não foi possível abrir: "+err.Error())
+	responder(w, map[string]int64{"id": id})
+}
+
+// limiteVisualizacao e o que a tela mostra de um arquivo. A copia salva vem inteira.
+const limiteVisualizacao = 256 * 1024
+
+func (s *Servidor) verArquivo(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	id, err := strconv.ParseInt(r.PathValue("rid"), 10, 64)
+	if err != nil {
+		falhar(w, http.StatusNotFound, "Registro não encontrado.")
 		return
 	}
-	go cmd.Wait()
-	if _, err := c.Custodia.Registrar("analise.aberta", map[string]any{"programa": filepath.Base(caminho)}); err != nil {
-		falhar(w, http.StatusInternalServerError, err.Error())
+	conteudo, total, err := s.Motor.LerArquivo(r.Context(), c, id, limiteVisualizacao)
+	if err != nil {
+		falhar(w, http.StatusNotFound, "O conteúdo deste item não está disponível: "+err.Error())
 		return
 	}
-	responder(w, map[string]bool{"ok": true})
+	texto, legivel := disco.TextoLegivel(conteudo)
+	resposta := map[string]any{"tamanho": total, "mostrado": len(conteudo), "legivel": legivel}
+	if legivel {
+		resposta["texto"] = texto
+	} else {
+		resposta["hex"] = disco.Hexadecimal(conteudo, 4096)
+	}
+	responder(w, resposta)
+}
+
+// copiaArquivo entrega o arquivo como anexo, sem abrir no navegador: pode ser hostil. A
+// custodia registra o hash do que saiu.
+func (s *Servidor) copiaArquivo(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	id, err := strconv.ParseInt(r.PathValue("rid"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	conteudo, _, err := s.Motor.LerArquivo(r.Context(), c, id, 0)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	soma := sha256.Sum256(conteudo)
+	sha := hex.EncodeToString(soma[:])
+	if _, err := c.Custodia.Registrar("arquivo.copiado", map[string]any{"registro": id, "sha256": sha, "tamanho": len(conteudo)}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"registro-%d-%s.bin\"", id, sha[:12]))
+	w.Write(conteudo)
 }
 
 func dirWSL(dirFerramentas string) string {

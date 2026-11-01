@@ -195,6 +195,55 @@ function painelMarcacao(base, l) {
   return el("div", { class: "marcacao" }, nota, el("div", { class: "marcacao-acoes" }, principal, retirar, situacao));
 }
 
+// Conteudo do arquivo, inclusive apagado, dentro da propria tela. Entra como texto, sem
+// interpretar nada: o arquivo pode ser hostil.
+function painelArquivo(base, l, casoId) {
+  let d = {};
+  try { d = typeof l.dados === "string" ? JSON.parse(l.dados) : (l.dados || {}); } catch { /* sem dados */ }
+  if (!d.inode || d.particao === undefined || d.residual || d.modo?.startsWith("d/")) return null;
+  const alvo = el("div", { class: "arquivo" });
+  const botao = el("button", {
+    onclick: async () => {
+      botao.disabled = true;
+      try {
+        const a = await api(`${base}/registros/${l.id}/arquivo`);
+        alvo.replaceChildren(
+          el("div", { class: "suave pequeno" }, a.legivel
+            ? `Mostrando ${formatoNumero(a.mostrado)} de ${formatoNumero(a.tamanho)} bytes.`
+            : `Arquivo binário: início em hexadecimal. Tamanho: ${formatoNumero(a.tamanho)} bytes.`),
+          el("pre", {}, a.legivel ? a.texto : a.hex));
+      } catch (x) { alvo.replaceChildren(el("div", { class: "aviso erro" }, x.message)); }
+      botao.disabled = false;
+    },
+  }, "Ver conteúdo");
+  const copia = el("a", { href: `/casos/${encodeURIComponent(casoId)}/registros/${l.id}/copia` }, el("button", {}, "Salvar cópia"));
+  return el("div", { class: "marcacao" }, el("div", { class: "marcacao-acoes" }, botao, copia), alvo);
+}
+
+// Busca dentro dos arquivos, no indice do exame profundo. Sem exame feito, nao mostra nada.
+async function painelConteudo(alvo, base, q, abrirRegistro) {
+  let r;
+  try { r = await api(`${base}/conteudo?q=${encodeURIComponent(q)}`); } catch (x) {
+    alvo.replaceChildren(el("div", { class: "aviso erro" }, x.message));
+    return;
+  }
+  if (!r.total) return;
+  const aviso = el("div", { class: "suave pequeno" });
+  alvo.replaceChildren(el("div", { class: "painel conteudo" },
+    el("h2", {}, `Citado dentro de ${formatoNumero(r.total)} ${r.total === 1 ? "arquivo" : "arquivos"}${r.total >= 100 ? " ou mais" : ""}`),
+    aviso,
+    el("div", { class: "lista-alertas" }, r.achados.map((a) =>
+      el("button", {
+        class: "link",
+        onclick: async () => {
+          try {
+            const { id } = await api(`${base}/caminho?caminho=${encodeURIComponent(a.caminho)}`);
+            abrirRegistro(id);
+          } catch (x) { aviso.textContent = x.message; }
+        },
+      }, a.apagado === "true" && el("span", { class: "selo alta" }, "Apagado"), a.apagado === "true" ? " " : "", el("span", { class: "desc" }, a.caminho), " ", el("span", { class: "suave pequeno" }, a.categoria))))));
+}
+
 // Visao geral: so o que os registros mostram, sem conclusoes prontas. Tudo e clicavel.
 async function abaVisao(area, base, acoes) {
   let v;
@@ -243,20 +292,10 @@ async function abaVisao(area, base, acoes) {
       el("div", {},
         el("h2", {}, "Exame profundo"),
         el("div", { class: "suave pequeno" }, p.pronto
-          ? "Pronto. Abre em um programa à parte, com busca no conteúdo de documentos e e-mails, mensagens e arquivos recuperados."
+          ? "Feito. A busca do topo agora também procura dentro de documentos, e-mails e mensagens."
           : "Lê o conteúdo de documentos, e-mails e mensagens, recupera arquivos e monta a linha do tempo completa. Pode levar bastante tempo e ocupar vários GB."),
         situacao),
-      p.pronto
-        ? el("button", {
-          class: "primario",
-          onclick: async () => {
-            try {
-              await api(`${base}/abrir-analise`, { method: "POST" });
-              situacao.textContent = "Abrindo em outra janela. Pode demorar alguns segundos.";
-            } catch (x) { situacao.textContent = x.message; }
-          },
-        }, "Abrir busca no conteúdo")
-        : el("button", {
+      !p.pronto && el("button", {
           onclick: async (e) => {
             e.target.disabled = true;
             e.target.textContent = "Em andamento";

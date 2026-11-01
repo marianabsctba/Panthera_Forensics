@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/marianabsctba/Panthera_Forensics/internal/processo"
 )
 
 // DistribuicaoWSL e o ambiente Linux dedicado. Tudo fica nele, sem tocar em outras
@@ -27,7 +29,7 @@ printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > /etc/resolv.conf
 `
 
 func wslExiste(ctx context.Context) bool {
-	saida, err := exec.CommandContext(ctx, "wsl.exe", "-l", "-q").Output()
+	saida, err := processo.Ocultar(exec.CommandContext(ctx, "wsl.exe", "-l", "-q")).Output()
 	if err != nil {
 		return false
 	}
@@ -42,7 +44,7 @@ func wslExiste(ctx context.Context) bool {
 }
 
 func noWSL(ctx context.Context, script string) error {
-	c := exec.CommandContext(ctx, "wsl.exe", "-d", DistribuicaoWSL, "-u", "root", "--", "bash", "-s")
+	c := processo.Ocultar(exec.CommandContext(ctx, "wsl.exe", "-d", DistribuicaoWSL, "-u", "root", "--", "bash", "-s"))
 	c.Stdin = strings.NewReader(script)
 	saida, err := c.CombinedOutput()
 	if err != nil {
@@ -84,14 +86,14 @@ func PrepararWSL(ctx context.Context, dir, script string) error {
 			return err
 		}
 		defer os.Remove(imagem)
-		saida, err := exec.CommandContext(ctx, "wsl.exe", "--import", DistribuicaoWSL, filepath.Join(dir, "disco"), imagem, "--version", "2").CombinedOutput()
+		saida, err := processo.Ocultar(exec.CommandContext(ctx, "wsl.exe", "--import", DistribuicaoWSL, filepath.Join(dir, "disco"), imagem, "--version", "2")).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("ao criar o ambiente Linux: %w: %s", err, bytes.ReplaceAll(saida, []byte{0}, nil))
 		}
 		if err := noWSL(ctx, ajusteRede); err != nil {
 			return err
 		}
-		if err := exec.CommandContext(ctx, "wsl.exe", "--terminate", DistribuicaoWSL).Run(); err != nil {
+		if err := processo.Ocultar(exec.CommandContext(ctx, "wsl.exe", "--terminate", DistribuicaoWSL)).Run(); err != nil {
 			return err
 		}
 	}

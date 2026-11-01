@@ -10,17 +10,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/marianabsctba/Panthera_Forensics/internal/caso"
 	"github.com/marianabsctba/Panthera_Forensics/internal/disco"
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
 	"github.com/marianabsctba/Panthera_Forensics/internal/motor"
+	"github.com/marianabsctba/Panthera_Forensics/internal/processo"
 	"github.com/marianabsctba/Panthera_Forensics/internal/relatorio"
 	"github.com/marianabsctba/Panthera_Forensics/internal/web"
 	"github.com/marianabsctba/Panthera_Forensics/modulos"
 )
 
 func main() {
+	processo.UsarConsoleDoPai()
 	if err := executar(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "erro:", err)
 		os.Exit(1)
@@ -220,6 +223,10 @@ func abrir(dirCasos string, m *motor.Motor, porta int, navegador bool) error {
 	if navegador {
 		abrirNavegador(url)
 	}
+	s.AoEncerrar = func() {
+		time.Sleep(300 * time.Millisecond)
+		os.Exit(0)
+	}
 	return http.Serve(l, s.Handler(endereco))
 }
 
@@ -233,5 +240,5 @@ func abrirNavegador(url string) {
 	default:
 		c = exec.Command("xdg-open", url)
 	}
-	_ = c.Start()
+	_ = processo.Ocultar(c).Start()
 }

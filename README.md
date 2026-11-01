@@ -31,10 +31,10 @@ Resultados de ferramentas citam trechos de ataques reais, e evidências podem co
 ## Uso
 
 ```bash
-go build -o panthera-forensics.exe ./cmd/panthera-forensics
+go build -ldflags -H=windowsgui -o panthera-forensics.exe ./cmd/panthera-forensics
 ```
 
-Dois cliques no executável abrem a interface em `127.0.0.1`. Casos, ferramentas e módulos locais ficam ao lado dele, ou na pasta indicada em `PANTHERA_HOME`. Use um disco com espaço, porque as evidências são copiadas para o caso.
+Dois cliques no executável abrem a interface em `127.0.0.1`, sem nenhuma janela de console, e o botão **Encerrar** fecha o programa. Casos, ferramentas e módulos locais ficam ao lado dele, ou na pasta indicada em `PANTHERA_HOME`. Use um disco com espaço, porque as evidências são copiadas para o caso.
 
 Comandos, para quem quiser automatizar:
 

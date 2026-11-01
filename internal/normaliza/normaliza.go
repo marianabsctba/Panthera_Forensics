@@ -310,7 +310,7 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 		}
 	}
 	for _, m := range s.Mapas {
-		if !condicaoAtendida(m.Se, linha) {
+		if !condicaoAtendida(m.Se, linha) || (len(m.SeNao) > 0 && condicaoAtendida(m.SeNao, linha)) {
 			continue
 		}
 		bruto := expandir(m.Quando, linha)

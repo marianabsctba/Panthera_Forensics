@@ -3,7 +3,10 @@
 package validacao
 
 import (
+	"context"
+	"crypto/md5"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -119,8 +122,12 @@ func TestDFR01NoExameProfundo(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer linhas.Close()
-	achados := map[string]map[string]string{}
-	datas := map[string]string{}
+	// Um nome pode aparecer mais de uma vez: o arquivo real e um resto de tamanho zero.
+	type item struct {
+		dados  map[string]string
+		quando string
+	}
+	achados := map[string][]item{}
 	for linhas.Next() {
 		var bruto, quando string
 		if err := linhas.Scan(&bruto, &quando); err != nil {
@@ -130,20 +137,95 @@ func TestDFR01NoExameProfundo(t *testing.T) {
 		if err := json.Unmarshal([]byte(bruto), &d); err != nil {
 			t.Fatal(err)
 		}
-		achados[d["Name"]] = d
-		datas[d["Name"]] = quando
+		achados[d["Name"]] = append(achados[d["Name"]], item{d, quando})
 	}
-	b := achados["Bunda.txt"]
-	if b == nil || b["Deleted"] != "true" || b["Size"] != "4296" {
-		t.Fatalf("Bunda.txt difere do gabarito: %+v", b)
+	apagado := func(nome string) *item {
+		for i, x := range achados[nome] {
+			if x.dados["Deleted"] == "true" && x.dados["Size"] != "0" {
+				return &achados[nome][i]
+			}
+		}
+		return nil
 	}
-	if !strings.HasPrefix(datas["Bunda.txt"], "2000-02-29T18:14:00") {
-		t.Errorf("data errada: %s", datas["Bunda.txt"])
+	ativo := func(nome string) bool {
+		for _, x := range achados[nome] {
+			if x.dados["Deleted"] == "false" && x.dados["Size"] != "0" {
+				return true
+			}
+		}
+		return false
+	}
+	b := apagado("Bunda.txt")
+	if b == nil || b.dados["Size"] != "4296" {
+		t.Fatalf("Bunda.txt difere do gabarito: %+v", achados["Bunda.txt"])
+	}
+	if !strings.HasPrefix(b.quando, "2000-02-29T18:14:00") {
+		t.Errorf("data errada: %s", b.quando)
 	}
 	for _, nome := range []string{"Arcturus.txt", "Castor.txt"} {
-		if achados[nome] == nil || achados[nome]["Deleted"] != "false" {
-			t.Errorf("%s deveria estar ativo: %+v", nome, achados[nome])
+		if !ativo(nome) || apagado(nome) != nil {
+			t.Errorf("%s deveria estar so ativo: %+v", nome, achados[nome])
 		}
+	}
+	var residuais int
+	err = c.DB.QueryRow(`SELECT COUNT(*) FROM registros WHERE fonte='Exame profundo: nomes residuais' AND descricao LIKE '%Castor.txt'`).Scan(&residuais)
+	if err != nil || residuais != 1 {
+		t.Errorf("Castor.txt deveria constar como nome residual: %d %v", residuais, err)
+	}
+}
+
+// Recupera o arquivo apagado pela leitura de disco e compara com o hash que o IPED calculou
+// por conta propria, e testa a busca no conteudo sem abrir nenhuma janela.
+func TestApagadoRecuperadoEBuscaNoConteudo(t *testing.T) {
+	if os.Getenv("PANTHERA_PROFUNDO") == "" {
+		t.Skip("so no exame profundo")
+	}
+	m, dados := ambiente(t)
+	exe := filepath.Join(t.TempDir(), "panthera-forensics.exe")
+	if s, err := exec.Command("go", "build", "-o", exe, "../cmd/panthera-forensics").CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, s)
+	}
+	m.Nucleo, m.Profundo = exe, true
+	c := processar(t, m, filepath.Join(dados, "nist-dfr", "dfr-01-ntfs.dd"))
+
+	id, err := c.RegistroDoCaminho("/dfr-01-ntfs.dd/vol_vol2/Bunda.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conteudo, total, err := m.LerArquivo(context.Background(), c, id, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 4296 || len(conteudo) != 4296 {
+		t.Errorf("tamanho do gabarito e 4296: total %d, lido %d", total, len(conteudo))
+	}
+	soma := md5.Sum(conteudo)
+	var bruto string
+	err = c.DB.QueryRow(`SELECT r.dados FROM registros r JOIN execucoes e ON e.id=r.execucao_id WHERE e.modulo='iped' AND r.dados LIKE '%"Name":"Bunda.txt"%' LIMIT 1`).Scan(&bruto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d map[string]string
+	if err := json.Unmarshal([]byte(bruto), &d); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.EqualFold(hex.EncodeToString(soma[:]), d["MD5"]) {
+		t.Errorf("MD5 recuperado %x difere do IPED %s", soma, d["MD5"])
+	}
+
+	if !m.ExameFeito(c) {
+		t.Fatal("exame profundo deveria constar como feito")
+	}
+	achou, err := m.BuscarConteudo(context.Background(), c, "Bunda", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if achou.Total == 0 || achou.Achados[0].Caminho == "null" {
+		t.Errorf("busca sem caminho: %+v", achou)
+	}
+	nada, err := m.BuscarConteudo(context.Background(), c, "termo-que-nao-existe-xyz", 20)
+	if err != nil || nada.Total != 0 {
+		t.Errorf("busca sem sentido: %+v %v", nada, err)
 	}
 }
 

@@ -24,6 +24,8 @@ import (
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/marianabsctba/Panthera_Forensics/internal/processo"
 )
 
 // Particao e um trecho da imagem que pode conter um sistema de arquivos.
@@ -250,6 +252,8 @@ func Executar(dirBin, dirEntrada, dirSaida string) error {
 	saidaRegistros := bufio.NewWriter(registros)
 	saidaDerivados := bufio.NewWriter(derivados)
 	t := &trabalho{bin: dirBin, saida: dirSaida, registros: json.NewEncoder(saidaRegistros), derivados: json.NewEncoder(saidaDerivados)}
+	// Sem escapar & e <: o caminho precisa continuar igual ao que esta no disco.
+	t.registros.SetEscapeHTML(false)
 	var erros []error
 	for _, segmentos := range grupos {
 		if err := t.imagem(segmentos); err != nil {
@@ -311,7 +315,7 @@ func (t *trabalho) comando(nome string, args ...string) *exec.Cmd {
 	if runtime.GOOS == "windows" {
 		nome += ".exe"
 	}
-	return exec.Command(filepath.Join(t.bin, nome), args...)
+	return processo.Ocultar(exec.Command(filepath.Join(t.bin, nome), args...))
 }
 
 // hashConteudo calcula o hash dos dados do disco, e nao dos arquivos da imagem: um E01
@@ -494,4 +498,45 @@ func (t *trabalho) extrair(segmentos []string, p Particao, e Entrada) error {
 		Arquivo: filepath.ToSlash(relativo), Nome: baseNome(e.Caminho),
 		Origem: e.Caminho, Evidencia: segmentos[0],
 	})
+}
+
+// LerArquivo devolve o conteudo de um arquivo de uma imagem, inclusive apagado, pelo inode
+// que a leitura de disco registrou. Limite zero traz o arquivo inteiro.
+func LerArquivo(dirBin, dirEntrada string, particao int64, inode string, limite int64) ([]byte, error) {
+	grupos, err := Agrupar(dirEntrada)
+	if err != nil {
+		return nil, err
+	}
+	if len(grupos) == 0 {
+		return nil, errors.New("imagem nao encontrada")
+	}
+	t := &trabalho{bin: dirBin}
+	args := append([]string{"-o", strconv.FormatInt(particao, 10)}, grupos[0]...)
+	c := t.comando("icat", append(args, inode)...)
+	tubo, err := c.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Start(); err != nil {
+		return nil, err
+	}
+	var leitor io.Reader = tubo
+	if limite > 0 {
+		leitor = io.LimitReader(tubo, limite)
+	}
+	conteudo, err := io.ReadAll(leitor)
+	if limite > 0 {
+		// O restante nao interessa: nao precisa esperar o fim de um arquivo enorme.
+		_ = c.Process.Kill()
+	}
+	_ = c.Wait()
+	return conteudo, err
+}
+
+// Hexadecimal mostra o inicio de um arquivo binario para leitura na tela.
+func Hexadecimal(b []byte, limite int) string {
+	if len(b) > limite {
+		b = b[:limite]
+	}
+	return hex.Dump(b)
 }

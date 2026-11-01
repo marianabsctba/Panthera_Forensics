@@ -193,6 +193,14 @@ func TestManterSemData(t *testing.T) {
 	}
 }
 
+func TestMapaExcluiLinhas(t *testing.T) {
+	s := modulo.Saida{Formato: "csv", Mapas: []modulo.Mapa{{Tipo: "evento", Descricao: "{N}", Se: map[string]string{"A": "1"}, SeNao: map[string]string{"T": "0"}}}}
+	r := coletar(t, s, "N,A,T\nx,1,5\ny,1,0\nz,0,5\n")
+	if len(r) != 1 || r[0].Descricao != "x" {
+		t.Fatalf("filtro errado: %+v", r)
+	}
+}
+
 func TestMapaCondicional(t *testing.T) {
 	s := modulo.Saida{Formato: "csv", Mapas: []modulo.Mapa{
 		{Tipo: "evento", Descricao: "visto {N}"},

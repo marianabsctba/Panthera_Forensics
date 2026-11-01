@@ -54,6 +54,15 @@ let pararEstado = null;
 function cabecalho(aoBuscar) {
   return el("header", {},
     el("button", { class: "link marca", onclick: telaInicial }, el("img", { src: "/simbolo.png", alt: "" }), "Panthera Forensics"),
+    el("button", {
+      class: "encerrar",
+      onclick: async (e) => {
+        try {
+          await api("/api/encerrar", { method: "POST" });
+          document.body.replaceChildren(el("main", {}, el("h1", {}, "Panthera Forensics encerrado"), el("p", { class: "suave" }, "Pode fechar esta aba.")));
+        } catch (x) { e.target.textContent = x.message; }
+      },
+    }, "Encerrar"),
     aoBuscar && el("input", {
       class: "busca", type: "search", "aria-label": "Buscar no caso",
       placeholder: "Buscar nome, hash, IP, usuário…",
@@ -89,7 +98,7 @@ async function telaInicial() {
 
   const lista = el("div", { class: "lista-casos" });
   const preparo = el("div");
-  app.replaceChildren(el("main", {},
+  app.replaceChildren(cabecalho(), el("main", {},
     el("div", { class: "capa" },
       el("img", { src: "/simbolo.png", alt: "Símbolo da Panthera" }),
       el("div", {}, el("h1", {}, "Panthera Forensics"), el("div", { class: "suave" }, "Abra um caso, arraste a evidência e investigue."))),
@@ -176,6 +185,9 @@ async function telaCaso(id) {
     if (!q) return abrirAba(abaAtual);
     abas.replaceChildren(...definicoes.map(([k, nome]) => el("button", { onclick: () => abrirAba(k) }, nome)));
     abaRegistros(area, base, { q }, "Nada encontrado para essa busca.", false, `Busca: ${q}`);
+    const noConteudo = el("div");
+    area.prepend(noConteudo);
+    painelConteudo(noConteudo, base, q, (registro) => abrirDetalhe(base, registro, id));
   }
   window.abrirEntidadeCaso = abrirEntidade;
 
@@ -395,6 +407,7 @@ async function abaRegistros(area, base, filtroBase, textoVazio, comGravidade, ti
 }
 
 async function abrirDetalhe(base, id) {
+  const casoId = decodeURIComponent(base.split("/").pop());
   document.querySelector(".gaveta")?.remove();
   const l = await api(`${base}/registros/${id}`);
   const fechar = () => { gaveta.remove(); document.removeEventListener("keydown", esc); };
@@ -418,6 +431,7 @@ async function abrirDetalhe(base, id) {
       el("div", { class: "etiquetas" }, l.entidades.map((e) =>
         el("button", { onclick: () => { fechar(); window.abrirEntidadeCaso(e); } },
           `${nomesEntidade[e.tipo] || e.tipo}: ${e.valor} (${e.registros})`)))),
+    painelArquivo(base, l, casoId),
     painelMarcacao(base, l),
     el("h2", { class: "pequeno" }, "Dados originais"),
     el("pre", {}, dados));
