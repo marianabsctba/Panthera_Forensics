@@ -114,6 +114,8 @@ O caso foi processado do zero, sem a linha do tempo completa: 188 leituras, nenh
 | Parcial | 5 | 9% |
 | Sem resposta | 3 | 5% |
 
+Três ajustes de texto vieram depois deste processamento e só foram conferidos à parte: tamanho das partições em GiB, pasta e corpo completo dos e-mails, e quebras de linha no resumo da busca do Windows.
+
 A conferência foi feita pelo banco do caso, comparando cada resposta com o gabarito, com busca e abertura do caso conferidas no navegador. As 49 ainda pedem interpretação de quem examina, como a 34, respondida pela imagem do CD-R embora o gabarito peça só o PC, e a 52, em que o alvo do Eraser sai dos nomes no diário do NTFS.
 
 **Continuam parciais:**
@@ -133,7 +135,7 @@ A conferência foi feita pelo banco do caso, comparando cada resposta com o gaba
 
 - Novas leituras: atalhos, listas de atalhos, pastas navegadas, lixeira, inclusive esvaziada, e diário do NTFS.
 - E-mails com data, remetente, destinatário, pasta e corpo. Histórico do Internet Explorer com URL. Banco da busca do Windows lido.
-- CD-R em UDF: entradas de diretório, inclusive as apagadas, e os 17 documentos recuperados por assinatura, com os tamanhos do gabarito. Doze trazem o nome original no próprio arquivo ou o tipo certo; os formatos antigos do Office só trazem trechos de texto.
+- CD-R em UDF: entradas de diretório, inclusive as apagadas, e os 17 documentos recuperados por assinatura, com os tamanhos do gabarito. Dez trazem o nome original nas propriedades do próprio arquivo. Os sete em formatos antigos do Office trazem só o tipo e trechos de texto, então o nome ainda depende de quem examina.
 - RM#2: os 17 arquivos apagados foram lidos com o tamanho exato do gabarito.
 - Hash com SHA-1, nome da imagem e comparação com o hash gravado no E01. Os quatro conferem. Partições com tamanho.
 - Corrigido um erro encontrado no caminho: em um caso com várias imagens, abrir um arquivo lia sempre a primeira imagem.
