@@ -318,7 +318,7 @@ function avisosResultado(e) {
     avisos.push(el("div", { class: "aviso" }, "Ainda não preparado, por isso não foi lido: ", r.ausentes.join(", "), ". Prepare na tela inicial e envie de novo."));
   }
   if (r.sem_modulo) {
-    avisos.push(el("div", { class: "aviso" }, `${r.sem_modulo} ${r.sem_modulo === 1 ? "arquivo foi preservado" : "arquivos foram preservados"} sem leitura automática disponível.`));
+    avisos.push(el("div", { class: "aviso" }, `${r.sem_modulo.toLocaleString("pt-BR")} ${r.sem_modulo === 1 ? "arquivo está em formato" : "arquivos estão em formatos"} sem leitura própria. Foram preservados e listados na linha do tempo, e o texto legível entra na busca.`));
   }
   return avisos;
 }
