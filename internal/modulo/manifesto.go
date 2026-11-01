@@ -93,6 +93,8 @@ type Saida struct {
 	Derivados string `yaml:"derivados"`
 	// Tabela e a tabela lida quando o formato e sqlite.
 	Tabela string `yaml:"tabela"`
+	// Legivel lista colunas com bytes em hexadecimal que tambem viram texto, em <coluna>_legivel.
+	Legivel []string `yaml:"legivel"`
 	// Somente limita a leitura a estes nomes de arquivo, sem extensao.
 	Somente []string `yaml:"somente"`
 	// Derivar lista arquivos da saida que viram novas evidencias, sem precisar de lista.

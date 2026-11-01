@@ -170,6 +170,21 @@ func TestDataEmMicrossegundos(t *testing.T) {
 	}
 }
 
+// Valor real do Registro no Hacking Case do NIST: cabecalho seguido de UTF-16.
+func TestBytesDoRegistroViramTexto(t *testing.T) {
+	if v := bytesLegiveis("08-00-0A-00-08-00-00-00-45-00-56-00-49-00-4C-00-00-00"); v != "EVIL" {
+		t.Fatalf("obtido %q", v)
+	}
+	s := modulo.Saida{Formato: "csv", Legivel: []string{"V"}, Mapas: []modulo.Mapa{{Tipo: "evento", Descricao: "{V_legivel}"}}}
+	r := coletar(t, s, "V\n41-00-42-00\ntexto comum\n")
+	if r[0].Descricao != "AB" {
+		t.Fatalf("hexadecimal nao convertido: %+v", r[0])
+	}
+	if r[1].Descricao != "(sem descrição)" {
+		t.Fatalf("texto comum nao deveria virar bytes: %+v", r[1])
+	}
+}
+
 func TestManterSemData(t *testing.T) {
 	s := modulo.Saida{Formato: "jsonl", Mapas: []modulo.Mapa{{Tipo: "evento", Quando: "{T}", Descricao: "{N}", ManterSemData: true}}}
 	r := coletar(t, s, `{"T":null,"N":"processo"}`+"\n")

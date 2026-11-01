@@ -71,6 +71,27 @@ func TestRegistrosDeApagadoNaoAfirmamHoraDaExclusao(t *testing.T) {
 	}
 }
 
+func TestTextoLegivel(t *testing.T) {
+	casos := []struct {
+		nome    string
+		dados   []byte
+		esperar string
+		ok      bool
+	}{
+		{"utf-8", []byte("usuário=Ana\n"), "usuário=Ana\n", true},
+		{"latin-1", []byte{'c', 'a', 'f', 0xE9}, "café", true},
+		{"utf-16", []byte{0xFF, 0xFE, 'o', 0, 'i', 0}, "oi", true},
+		{"binario", []byte{0, 1, 2, 3, 4, 5, 'a'}, "", false},
+		{"vazio", nil, "", false},
+	}
+	for _, c := range casos {
+		obtido, ok := TextoLegivel(c.dados)
+		if ok != c.ok || obtido != c.esperar {
+			t.Errorf("%s: obtido %q %v", c.nome, obtido, ok)
+		}
+	}
+}
+
 func TestAgruparSegmentos(t *testing.T) {
 	dir := t.TempDir()
 	for _, n := range []string{"0/disco.E02", "1/disco.E01", "2/outro.dd", "3/parte.002", "4/parte.001"} {

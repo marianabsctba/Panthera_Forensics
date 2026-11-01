@@ -39,6 +39,8 @@ type Resumo struct {
 	Inicio        string           `json:"inicio"`
 	Fim           string           `json:"fim"`
 	ExecucoesErro int64            `json:"execucoes_erro"`
+	// Fuso e o nome do fuso da maquina, como gravado na evidencia.
+	Fuso string `json:"fuso"`
 }
 
 // Filtro restringe uma consulta de registros.
@@ -117,6 +119,11 @@ func (c *Caso) Resumir() (Resumo, error) {
 		if err := c.DB.QueryRow(consulta).Scan(destino); err != nil {
 			return r, err
 		}
+	}
+	// O mais citado, porque o Registro guarda mais de um conjunto de configuracoes.
+	if err := c.DB.QueryRow(`SELECT COALESCE((SELECT e.valor FROM entidades e JOIN registro_entidade re ON re.entidade_id=e.id
+		WHERE e.tipo='fuso' GROUP BY e.id ORDER BY COUNT(*) DESC LIMIT 1),'')`).Scan(&r.Fuso); err != nil {
+		return r, err
 	}
 	linhas, err := c.DB.Query(`SELECT severidade,COUNT(*) FROM registros WHERE tipo='alerta' GROUP BY severidade`)
 	if err != nil {

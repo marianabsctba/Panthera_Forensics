@@ -17,7 +17,11 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Módulos de memória (Volatility) | **Não validados**: não listam processos nas imagens do NIST, de 2005 e 2006 |
 | Módulos bulk_extractor, YARA, capa, Chainsaw, tshark, Zeek, Suricata e Plaso | Executados com dados públicos reais, ver [validação](validacao/README.md) |
 | Ambiente Linux dedicado (WSL) para tshark, Zeek, Suricata e Plaso | Instalado e em uso; a criação pelo `preparar` a partir do zero ainda não foi testada |
-| Recuperação do conteúdo de arquivos apagados | Não feita |
+| Exame profundo opcional (IPED e Plaso) | DFR-01 confere com o gabarito no IPED; o Plaso só tem conferência de datas |
+| Visão geral, gráficos, filtros, mapa de conexões, marcações e fuso da evidência | Prontos, conferidos no navegador com o Hacking Case |
+| Busca no conteúdo | Arquivos de texto pequenos fora da pasta do Windows na análise padrão; demais formatos no exame profundo, na janela do IPED |
+| Recuperação do conteúdo de arquivos apagados | Só pela janela do IPED, sem teste de conteúdo com gabarito |
+| Teste às cegas com um caso não usado para calibrar | Não feito |
 | Coletor para a máquina-alvo | Não feito |
 
 ## Antivírus
@@ -39,6 +43,7 @@ panthera-forensics preparar                         baixa as ferramentas e confe
 panthera-forensics modulos                          lista os módulos
 panthera-forensics novo [-numero N] [-perito P] X   cria um caso
 panthera-forensics processar <caso> <caminho>...    preserva e lê as evidências
+panthera-forensics aprofundar <caso>                roda o exame profundo, mais pesado
 panthera-forensics verificar <caso>                 recalcula os hashes
 panthera-forensics relatorio <caso>                 grava o relatório
 ```

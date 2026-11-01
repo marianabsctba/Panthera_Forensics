@@ -184,7 +184,8 @@ th{font-weight:600}code{font:11px ui-monospace,Consolas,monospace;word-break:bre
 
 <h2>Resumo</h2>
 <p>{{.Resumo.Evidencias}} evidência(s), {{.Resumo.Registros}} registro(s) e {{.Resumo.Entidades}} entidade(s).
-{{if .Resumo.Inicio}}Período observado, em UTC: {{curto .Resumo.Inicio}} a {{curto .Resumo.Fim}}.{{end}}</p>
+{{if .Resumo.Inicio}}Período observado, em UTC: {{curto .Resumo.Inicio}} a {{curto .Resumo.Fim}}.{{end}}
+{{if .Resumo.Fuso}}Fuso registrado na máquina analisada: {{.Resumo.Fuso}}. As datas deste relatório estão em UTC.{{end}}</p>
 <p>Os achados abaixo foram gerados automaticamente e são pontos de partida para o exame. Cada um precisa ser conferido na evidência de origem antes de sustentar qualquer conclusão.</p>
 {{if .Resumo.ExecucoesErro}}<p class="ruim">{{.Resumo.ExecucoesErro}} etapa(s) de processamento falharam. Veja a metodologia.</p>{{end}}
 {{if .NaoExecutados}}<p class="ruim">{{len .NaoExecutados}} leitura(s) aplicáveis não foram executadas. Veja a metodologia.</p>{{end}}

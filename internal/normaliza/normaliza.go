@@ -289,7 +289,26 @@ func achatarPares(v any) any {
 	return saida
 }
 
+var bytesHex = regexp.MustCompile(`^[0-9A-Fa-f]{2}(-[0-9A-Fa-f]{2})*$`)
+
+// bytesLegiveis tira de 08-00-45-00 o que e texto: os caracteres imprimiveis, sem os
+// zeros do UTF-16 nem os bytes de controle de um cabecalho.
+func bytesLegiveis(hexa string) string {
+	var b strings.Builder
+	for _, par := range strings.Split(hexa, "-") {
+		if v, err := strconv.ParseUint(par, 16, 8); err == nil && v >= 32 && v < 127 {
+			b.WriteByte(byte(v))
+		}
+	}
+	return b.String()
+}
+
 func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error) error {
+	for _, coluna := range s.Legivel {
+		if v, ok := linha[coluna].(string); ok && bytesHex.MatchString(v) {
+			linha[coluna+"_legivel"] = bytesLegiveis(v)
+		}
+	}
 	for _, m := range s.Mapas {
 		if !condicaoAtendida(m.Se, linha) {
 			continue

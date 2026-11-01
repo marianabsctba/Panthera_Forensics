@@ -281,6 +281,47 @@ func TestHackingCase(t *testing.T) {
 	t.Run("Q25 site acessado pela vitima", func(t *testing.T) { buscavel(t, "mobile.msn.com") })
 	t.Run("Q26 e-mail web", func(t *testing.T) { buscavel(t, "mrevilrulez@yahoo.com") })
 
+	// Perguntas que dependem do texto dos arquivos.
+	t.Run("Q7 dominio primario", func(t *testing.T) { registro(t, "Domínio primário: EVIL") })
+	t.Run("Q10 quem mais usa", func(t *testing.T) {
+		var com, mrEvil int
+		err := c.DB.QueryRow(`SELECT COUNT(DISTINCT descricao),SUM(descricao LIKE '%Mr. Evil%') FROM registros WHERE descricao LIKE 'User Accounts (SAM): V = Username:%' AND descricao LIKE '%Last login: 2%'`).Scan(&com, &mrEvil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if com != 1 || mrEvil == 0 {
+			t.Errorf("so Mr. Evil deveria ter login registrado: %d contas, %d dele", com, mrEvil)
+		}
+	})
+	t.Run("Q13 placas de rede", func(t *testing.T) {
+		buscavel(t, "Xircom")
+		buscavel(t, "WL110")
+	})
+	t.Run("Q15 placa usada na instalacao", func(t *testing.T) { buscavel(t, "Xircom") })
+	t.Run("Q18 servidor de noticias", func(t *testing.T) { buscavel(t, "news.dallas.sbcglobal.net") })
+	t.Run("Q19 programas de noticias", func(t *testing.T) {
+		existe(t, "Outlook Express")
+		existe(t, "Agent")
+	})
+	t.Run("Q20 grupos assinados", func(t *testing.T) {
+		for _, g := range []string{"alt.2600.phreakz", "alt.2600.cardz", "alt.2600.crackz", "alt.binaries.hacking.utilities", "free.binaries.hacking.beginner"} {
+			buscavel(t, g)
+		}
+	})
+	t.Run("Q21 usuario do IRC", func(t *testing.T) {
+		buscavel(t, "Mini Me")
+		buscavel(t, "none@of.ya")
+		buscavel(t, "mrevilrulez")
+	})
+	t.Run("Q29 lixeira nao esta apagada", func(t *testing.T) {
+		for _, i := range itens {
+			caminho := strings.ToLower(i.Caminho)
+			if strings.Contains(caminho, "/recycler/") && strings.HasSuffix(caminho, ".exe") && i.Apagado {
+				t.Errorf("gabarito diz que nao foram apagados: %s", i.Caminho)
+			}
+		}
+	})
+
 	t.Run("Primeira tela aponta ferramentas de ataque", func(t *testing.T) {
 		alertas, err := c.Consultar(caso.Filtro{Tipo: "alerta", Severidade: "media", Limite: 1000})
 		if err != nil {

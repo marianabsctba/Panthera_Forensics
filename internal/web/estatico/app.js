@@ -34,7 +34,7 @@ const nomesSeveridade = { critica: "Crítica", alta: "Alta", media: "Média", ba
 const nomesEntidade = { host: "Máquina", usuario: "Usuário", arquivo: "Arquivo", ip: "IP", hash: "Hash", url: "Endereço" };
 
 function dataHora(l) {
-  if (l.quando) return l.quando.slice(0, 19).replace("T", " ");
+  if (l.quando) return textoData(l.quando);
   return l.quando_bruto ? `Data ilegível: ${l.quando_bruto}` : "Sem data";
 }
 
@@ -222,6 +222,7 @@ async function telaCaso(id) {
     subtitulo.textContent = [caso.numero, caso.perito].filter(Boolean).join(" · ");
     // Com evidencia no caso, o campo de arrastar so precisa continuar disponivel.
     soltar.classList.toggle("compacto", resumo.evidencias > 0);
+    localFuso.replaceChildren(seletorFuso(resumo.fuso, () => abrirAba(abaAtual)));
     const a = resumo.alertas || {};
     numeros.replaceChildren(
       numero(a.critica || 0, "Críticos"), numero(a.alta || 0, "Altos"),
@@ -254,11 +255,12 @@ async function telaCaso(id) {
   const titulo = el("h1");
   const subtitulo = el("div", { class: "suave" });
   const verificacao = el("span", { class: "pequeno" });
+  const localFuso = el("span");
   app.replaceChildren(cabecalho(buscar), el("main", {},
     el("div", { class: "topo-caso" },
       el("div", {}, titulo, subtitulo),
       el("div", {},
-        verificacao, " ",
+        localFuso, " ", verificacao, " ",
         el("button", {
           onclick: async () => {
             verificacao.textContent = "Conferindo…";
@@ -343,7 +345,7 @@ async function abaRegistros(area, base, filtroBase, textoVazio, comGravidade, ti
     el("table", {},
       el("thead", {}, el("tr", {},
         comGravidade && el("th", {}, "Gravidade"),
-        el("th", {}, "Quando (UTC)"), el("th", {}, "O que aconteceu"), el("th", {}, "Fonte"))),
+        el("th", {}, rotuloQuando()), el("th", {}, "O que aconteceu"), el("th", {}, "Fonte"))),
       corpo), mais);
   area.replaceChildren(titulo ? el("h2", {}, titulo) : "", grafico, filtros, vazio, tabela);
   const limite = 200;
@@ -405,7 +407,9 @@ async function abrirDetalhe(base, id) {
     el("h2", { class: "titulo-detalhe" }, " "),
     el("div", {}, selo(l.severidade)),
     el("dl", {},
-      el("dt", {}, "Quando (UTC)"), el("dd", {}, dataHora(l)),
+      el("dt", {}, rotuloQuando()), el("dd", {}, dataHora(l)),
+      fusoEscolhido.zona && l.quando && el("dt", {}, "Em UTC"),
+      fusoEscolhido.zona && l.quando && el("dd", {}, l.quando.slice(0, 19).replace("T", " ")),
       el("dt", {}, "Fonte"), el("dd", {}, l.fonte || "Não informada"),
       el("dt", {}, "Leitura"), el("dd", {}, l.modulo),
       el("dt", {}, "Origem"), el("dd", {}, el("code", {}, [l.origem_arquivo, l.origem_local && `#${l.origem_local}`].filter(Boolean).join(" ") || "Não informada"))),

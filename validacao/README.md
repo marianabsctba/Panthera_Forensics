@@ -12,7 +12,8 @@ PANTHERA_HOME=<pasta com ferramentas> PANTHERA_DADOS=<pasta de dados> go test -t
 |---|---|---|
 | DFR-01 NTFS, da imagem e da `$MFT` | Arquivo apagado, tamanho, datas e arquivos ativos | Passa |
 | DFR-16 NTFS, da imagem e da `$MFT` | Todos os nomes de arquivo ativos do gabarito aparecem | Passa |
-| Hacking Case | 20 das 31 perguntas, listadas abaixo | Passa nas 20; Q30 diverge; as demais não foram testadas |
+| Hacking Case | 31 perguntas, detalhadas abaixo | Passa em 29; Q30 diverge; Q31 não testada |
+| DFR-01 NTFS no exame profundo (IPED) | Arquivo apagado, tamanho, data e arquivos ativos | Passa |
 | Navegadores (amostras do Hindsight) | Chrome com 63 itens, Firefox com 6, sem perda | Passa |
 | Rede (amostra do projeto Suricata) | Regra 2100498 esperada, fuso convertido, conexão registrada | Passa |
 | Logs do Windows com Chainsaw (amostra pública) | Alerta crítico em um log que foi limpo | Passa |
@@ -22,10 +23,11 @@ PANTHERA_HOME=<pasta com ferramentas> PANTHERA_DADOS=<pasta de dados> go test -t
 
 ### Hacking Case
 
-- **Passam:** Q1 hash, Q2 sistema, Q3 instalação, Q4 fuso, Q5 dono, Q6 computador, Q8 desligamento, Q9 contas, Q11 último usuário, Q12 arquivo do Look@LAN, Q14 IP, Q16 programas, Q17 e-mail SMTP, Q22 canais de IRC, Q23 arquivo interceptado, Q24 sistema da vítima, Q25 site acessado, Q26 e-mail web, Q27 cópia de e-mail e Q28 executáveis na lixeira.
-- **Diverge:** na Q30, o gabarito diz 3 arquivos apagados, e o The Sleuth Kit lista 70 entradas apagadas com metadados. A causa não foi confirmada, e o número não foi ajustado.
-- **Não testadas:** Q7, Q10, Q13, Q15, Q18 a Q21, Q29 e Q31.
-- **Alcance:** Q12, Q14, Q16, Q17, Q22 a Q27 confirmam que a informação existe no caso e que a busca a encontra. Como o teste já sabe o que procurar, isso não demonstra que um exame sem o gabarito chegaria a ela.
+- **Passam:** Q1 a Q29, na análise padrão. Q3 e Q8 foram conferidas também no fuso da máquina, porque o gabarito está em horário local.
+- **Diverge:** na Q30, o gabarito diz 3 arquivos apagados, o The Sleuth Kit lista 70 entradas apagadas com metadados e o IPED marca 365 itens. A causa não foi confirmada, e nenhum número foi ajustado.
+- **Não testada:** Q31, que depende de um módulo antivírus. As assinaturas públicas usadas aqui não acusam nada neste disco, embora o Windows Defender tenha detectado malware em arquivos recuperados dele.
+- **Alcance:** as buscas confirmam que a informação existe no caso e que a tela a encontra. Como o teste já sabe o que procurar, isso não demonstra que um exame sem o gabarito chegaria a ela.
+- **Sem valor de prova às cegas:** este gabarito foi visto durante a calibração. A nota que vale como teste independente precisa vir de um caso não usado para calibrar, como o Data Leakage do NIST, ainda não executado.
 - **Calibração:** as regras próprias de uso duplo foram ajustadas vendo este caso. Não houve alarme falso em nenhum `.exe` ou `.dll` da pasta `System32` desta máquina (sem subpastas), mas a taxa de acerto em casos desconhecidos não foi medida.
 
 ### Memória

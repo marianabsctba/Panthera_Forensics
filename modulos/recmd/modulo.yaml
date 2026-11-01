@@ -13,18 +13,29 @@ instalar:
 comando:
   windows:
     exec: RECmd/RECmd.exe
-    args: [-f, "{entrada}", --bn, "{ferramenta}/RECmd/BatchExamples/DFIRBatch.reb", --csv, "{saida}", --csvf, registro.csv]
+    args: [-f, "{entrada}", --bn, "{regras}/recmd/panthera.reb", --csv, "{saida}", --csvf, registro.csv]
 saida:
   arquivos: "*registro*.csv"
   formato: csv
+  legivel: [ValueData]
   mapas:
+    - tipo: evento
+      se: {Description: Primary Domain}
+      quando: "{LastWriteTimestamp}"
+      fonte: "Registro: {Category}"
+      descricao: "Domínio primário: {ValueData_legivel}"
+      origem_local: "{KeyPath}"
+      entidades:
+        - {tipo: dominio-windows, valor: "{ValueData_legivel}"}
     - tipo: evento
       manter_sem_data: true
       quando: "{LastWriteTimestamp}"
       fonte: "Registro: {Category}"
-      descricao: "{Description}: {ValueName} = {ValueData}"
+      descricao: "{Description}: {ValueName} = {ValueData} {ValueData2}"
       origem_local: "{KeyPath}"
       entidades:
+        # O fuso da maquina permite mostrar cada data no horario local dela.
+        - {tipo: fuso, valor: "{ValueData}", se: {ValueName: StandardName}}
         - {tipo: host, valor: "{ValueData}", se: {ValueName: ComputerName}}
         - {tipo: usuario, valor: "{ValueData}", se: {ValueName: DefaultUserName}}
         - {tipo: usuario, valor: "{ValueData}", se: {Description: User Accounts (SAM), ValueName: V}, remover: '^Username: | Id: .*$'}

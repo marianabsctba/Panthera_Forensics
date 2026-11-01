@@ -124,6 +124,23 @@ func TestAtividadeAmpliaAoFiltrarPeriodo(t *testing.T) {
 	}
 }
 
+func TestFusoVemDaEvidencia(t *testing.T) {
+	c := semear(t)
+	if r, err := c.Resumir(); err != nil || r.Fuso != "" {
+		t.Fatalf("fuso inventado: %+v %v", r, err)
+	}
+	var ent int64
+	if err := c.DB.QueryRow(`INSERT INTO entidades(tipo,valor) VALUES('fuso','Central Standard Time') RETURNING id`).Scan(&ent); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.DB.Exec(`INSERT INTO registro_entidade VALUES(1,?)`, ent); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := c.Resumir(); err != nil || r.Fuso != "Central Standard Time" {
+		t.Fatalf("fuso: %+v %v", r, err)
+	}
+}
+
 func TestAtividadeCasoVazio(t *testing.T) {
 	c, err := Criar(t.TempDir(), "Vazio", "", "")
 	if err != nil {

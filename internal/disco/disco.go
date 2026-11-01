@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // Particao e um trecho da imagem que pode conter um sistema de arquivos.
@@ -114,6 +116,47 @@ var artefatos = regexp.MustCompile(`(?i)(` +
 	// Executaveis fora da pasta do Windows, onde programas instalados pelo usuario ficam.
 	`|/(program files[^/]*|documents and settings|users|recycler|\$recycle\.bin|temp)/.+\.(exe|dll|scr|sys)` +
 	`)$`)
+
+// textos sao arquivos pequenos de configuracao e anotacao, com conteudo util na busca.
+// A pasta do Windows fica de fora: sao milhares de arquivos do proprio sistema.
+var (
+	textos       = regexp.MustCompile(`(?i)\.(ini|txt|log|cfg|conf|url|xml|htm|html|csv|nfo|lst)$`)
+	pastaWindows = regexp.MustCompile(`(?i)^/windows/`)
+)
+
+const maximoTexto = 256 * 1024
+
+// TextoLegivel converte o conteudo em texto, ou diz que e binario. Aceita UTF-16, comum
+// em arquivos do Windows, e Latin-1, comum nos antigos.
+func TextoLegivel(b []byte) (string, bool) {
+	if len(b) == 0 {
+		return "", false
+	}
+	if len(b) >= 2 && b[0] == 0xFF && b[1] == 0xFE {
+		unidades := make([]uint16, 0, len(b)/2)
+		for i := 2; i+1 < len(b); i += 2 {
+			unidades = append(unidades, uint16(b[i])|uint16(b[i+1])<<8)
+		}
+		return string(utf16.Decode(unidades)), true
+	}
+	controle := 0
+	for _, c := range b {
+		if c < 9 || (c > 13 && c < 32) {
+			controle++
+		}
+	}
+	if controle*20 > len(b) {
+		return "", false
+	}
+	if utf8.Valid(b) {
+		return string(b), true
+	}
+	runas := make([]rune, len(b))
+	for i, c := range b {
+		runas[i] = rune(c)
+	}
+	return string(runas), true
+}
 
 // registro segue o formato "contrato" dos modulos.
 type registro struct {
@@ -348,7 +391,7 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 		return false, err
 	}
 	vistas := map[string]bool{}
-	var nomes []Entrada
+	var nomes, legiveis []Entrada
 	leitor := bufio.NewScanner(tubo)
 	leitor.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	total := 0
@@ -376,12 +419,21 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 		if !e.Apagado && !e.Residual && !e.NomeArquivo && artefatos.MatchString(e.Caminho) {
 			nomes = append(nomes, e)
 		}
+		if !e.Apagado && !e.Residual && !e.NomeArquivo && e.Tamanho > 0 && e.Tamanho <= maximoTexto &&
+			textos.MatchString(e.Caminho) && !pastaWindows.MatchString(e.Caminho) {
+			legiveis = append(legiveis, e)
+		}
 	}
 	if err := leitor.Err(); err != nil {
 		return false, err
 	}
 	if err := c.Wait(); err != nil && total == 0 {
 		return false, nil
+	}
+	for _, e := range legiveis {
+		if err := t.indexarTexto(segmentos, p, e); err != nil {
+			return false, err
+		}
 	}
 	for _, e := range nomes {
 		if err := t.extrair(segmentos, p, e); err != nil {
@@ -398,6 +450,26 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// indexarTexto coloca o conteudo de um arquivo pequeno na busca do caso. Um arquivo
+// ilegivel nao atrapalha os demais: ele continua listado pelo nome.
+func (t *trabalho) indexarTexto(segmentos []string, p Particao, e Entrada) error {
+	args := append([]string{"-o", strconv.FormatInt(p.Inicio, 10)}, segmentos...)
+	conteudo, err := t.comando("icat", append(args, e.Inode)...).Output()
+	if err != nil {
+		return nil
+	}
+	texto, ok := TextoLegivel(conteudo)
+	if !ok {
+		return nil
+	}
+	return t.registros.Encode(registro{
+		Tipo: "evento", Quando: hora(e.Alteracao), Fonte: "Conteúdo de arquivo",
+		Descricao:   "Texto do arquivo: " + e.Caminho,
+		OrigemLocal: fmt.Sprintf("partição no setor %d, inode %s", p.Inicio, e.Inode),
+		Dados:       map[string]any{"caminho": e.Caminho, "texto": texto},
+	})
 }
 
 func (t *trabalho) extrair(segmentos []string, p Particao, e Entrada) error {
