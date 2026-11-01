@@ -125,6 +125,12 @@ func (m *Motor) Planejar(c *caso.Caso) ([]Tarefa, Resultado, error) {
 	porTipo := map[string][]caso.Evidencia{}
 	for _, e := range evidencias {
 		if e.Tipo == "" {
+			// Um arquivo bloqueado ou removido, em geral pelo antivirus, nao pode parar os demais.
+			// Ele fica sem leitura e vira um alerta na listagem de preservados.
+			if _, err := os.Stat(c.CaminhoEvidencia(e.SHA256)); err != nil || !legivel(c.CaminhoEvidencia(e.SHA256)) {
+				res.SemModulo++
+				continue
+			}
 			tipo, err := m.Identificar(c.CaminhoEvidencia(e.SHA256), e.Nome)
 			if err != nil {
 				return nil, res, err
@@ -332,6 +338,16 @@ func (m *Motor) Processar(ctx context.Context, c *caso.Caso, avisar Progresso) (
 		avisar("", feitas, feitas)
 	}
 	return res, nil
+}
+
+// legivel confere se o arquivo abre, porque o antivirus pode bloquear a abertura.
+func legivel(caminho string) bool {
+	f, err := os.Open(caminho)
+	if err != nil {
+		return false
+	}
+	f.Close()
+	return true
 }
 
 func identificarTarefa(t Tarefa) string {

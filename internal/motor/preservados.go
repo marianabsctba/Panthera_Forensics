@@ -53,6 +53,7 @@ func (m *Motor) listarPreservados(ctx context.Context, c *caso.Caso) (int, error
 	if len(pendentes) == 0 {
 		return 0, nil
 	}
+	bloqueadas := 0
 	agora := time.Now().UTC().Format(time.RFC3339)
 	tx, err := c.DB.Begin()
 	if err != nil {
@@ -73,16 +74,23 @@ func (m *Motor) listarPreservados(ctx context.Context, c *caso.Caso) (int, error
 			return 0, err
 		}
 		dados := map[string]any{"caminho": e.Origem, "tamanho": e.Tamanho, "sha256": e.SHA256, "md5": e.MD5}
-		if texto, ok := textoInicial(c.CaminhoEvidencia(e.SHA256)); ok {
+		tipo, severidade := "evento", ""
+		rotulo := "Arquivo preservado: "
+		if !legivel(c.CaminhoEvidencia(e.SHA256)) {
+			// O hash registrado na entrada continua valendo. O conteudo e que nao esta mais
+			// acessivel neste computador, e o exame nao pode fingir que o leu.
+			tipo, severidade, rotulo = "alerta", "alta", "Evidência bloqueada ou removida, possivelmente pelo antivírus: "
+			bloqueadas++
+		} else if texto, ok := textoInicial(c.CaminhoEvidencia(e.SHA256)); ok {
 			dados["texto"] = texto
 		}
 		bruto, err := json.Marshal(dados)
 		if err != nil {
 			return 0, err
 		}
-		descricao := "Arquivo preservado: " + strings.TrimPrefix(e.Origem, "enviado pela interface: ")
-		r, err := tx.Exec(`INSERT INTO registros(execucao_id,tipo,fonte,descricao,origem_arquivo,origem_local,dados) VALUES(?,?,?,?,?,?,?)`,
-			execucao, "evento", FontePreservados, descricao, fmt.Sprintf("%s (evidência %d)", e.Nome, e.ID), localPreservado(e), string(bruto))
+		descricao := rotulo + strings.TrimPrefix(e.Origem, "enviado pela interface: ")
+		r, err := tx.Exec(`INSERT INTO registros(execucao_id,tipo,severidade,fonte,descricao,origem_arquivo,origem_local,dados) VALUES(?,?,?,?,?,?,?,?)`,
+			execucao, tipo, severidade, FontePreservados, descricao, fmt.Sprintf("%s (evidência %d)", e.Nome, e.ID), localPreservado(e), string(bruto))
 		if err != nil {
 			return 0, err
 		}
@@ -97,7 +105,7 @@ func (m *Motor) listarPreservados(ctx context.Context, c *caso.Caso) (int, error
 	if err := tx.Commit(); err != nil {
 		return 0, err
 	}
-	_, err = c.Custodia.Registrar("arquivos.listados", map[string]any{"execucao": execucao, "total": len(pendentes)})
+	_, err = c.Custodia.Registrar("arquivos.listados", map[string]any{"execucao": execucao, "total": len(pendentes), "bloqueadas": bloqueadas})
 	return len(pendentes), err
 }
 

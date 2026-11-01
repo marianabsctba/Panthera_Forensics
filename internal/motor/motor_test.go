@@ -320,6 +320,47 @@ func zipCom(t *testing.T, itens map[string][]byte) []byte {
 	return b.Bytes()
 }
 
+func TestEvidenciaRemovidaPeloAntivirusNaoParaOsOutros(t *testing.T) {
+	m, c := montar(t)
+	adicionar(t, c, "bom.bin", "FAKE bom")
+	adicionar(t, c, "removido.dat", "conteudo que o antivirus removeu")
+	todas, err := c.Evidencias()
+	if err != nil {
+		t.Fatal(err)
+	}
+	caminho := c.CaminhoEvidencia(todas[1].SHA256)
+	if err := os.Chmod(caminho, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(caminho); err != nil {
+		t.Fatal(err)
+	}
+	res, err := m.Processar(context.Background(), c, nil)
+	if err != nil {
+		t.Fatalf("um arquivo removido nao pode parar o processamento: %v", err)
+	}
+	if res.Executadas != 1 {
+		t.Fatalf("o arquivo bom deveria ser lido: %+v", res)
+	}
+	alertas, err := c.Consultar(caso.Filtro{Severidade: "alta", Texto: "antivírus"})
+	if err != nil || len(alertas) != 1 || !strings.Contains(alertas[0].Descricao, "removido.dat") {
+		t.Fatalf("sem alerta da evidencia removida: %+v %v", alertas, err)
+	}
+	conf, err := c.Verificar()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if conf[1].Integra || !conf[0].Integra {
+		t.Fatalf("conferencia errada: %+v", conf)
+	}
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	if todos, _ := c.Consultar(caso.Filtro{Texto: "antivírus"}); len(todos) != 1 {
+		t.Fatalf("alerta repetido: %d", len(todos))
+	}
+}
+
 func TestZipDentroDeZip(t *testing.T) {
 	m, c := montar(t)
 	dentro := zipCom(t, map[string][]byte{"pasta/nota.txt": []byte("achado dentro do segundo pacote")})

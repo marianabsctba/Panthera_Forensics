@@ -476,16 +476,16 @@ async function abaEvidencias(area, base) {
         el("td", { class: "desc" }, e.nome, el("div", { class: "suave pequeno" }, e.origem)),
         el("td", { class: "data" }, tamanho(e.tamanho)),
         el("td", {}, el("code", {}, e.sha256))))))),
-    d.execucoes.length ? el("div", { class: "grafico-topo titulo-leituras" },
+    el("div", { class: "grafico-topo titulo-leituras" },
       el("h2", {}, "Leituras"),
-      d.execucoes.some((x) => x.estado === "falhou") && el("button", {
+      el("button", {
         onclick: async (e) => {
           e.target.disabled = true;
-          e.target.textContent = "Tentando de novo. Acompanhe no topo.";
+          e.target.textContent = "Lendo. Acompanhe no topo.";
           await api(`${base}/processar?refazer=1`, { method: "POST" });
           window.acompanharCaso?.();
         },
-      }, "Tentar de novo o que falhou")) : "",
+      }, "Ler de novo")),
     d.execucoes.length ? el("div", { class: "tabela painel" }, el("table", {},
       el("thead", {}, el("tr", {}, el("th", {}, "Leitura"), el("th", {}, "Situação"), el("th", {}, "Registros"))),
       el("tbody", {}, d.execucoes.map((x) => el("tr", {},
