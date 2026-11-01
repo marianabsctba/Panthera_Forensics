@@ -1,0 +1,33 @@
+contrato: 1
+nome: hayabusa
+titulo: Detecção em logs do Windows
+versao: "4.3.1"
+reconhece:
+  - tipo: evtx
+    magica_hex: "456c6646696c6500"
+    extensoes: [.evtx]
+consome: [evtx]
+modo: lote
+instalar:
+  windows-amd64:
+    url: https://github.com/Yamato-Security/hayabusa/releases/download/v4.3.1/hayabusa-4.3.1-win-x64.zip
+    sha256: e4196a5e9c9bf46265a45d5272efb2daa489871f2f8ad0c2485a72a0fd0c8ddb
+comando:
+  windows:
+    exec: hayabusa-*.exe
+    dir: ferramenta
+    args: [json-timeline, -d, "{entrada}", -L, -o, "{saida}/alertas.jsonl", -w, -q, -U, -r, "{ferramenta}/rules"]
+saida:
+  arquivos: alertas.jsonl
+  formato: jsonl
+  severidades: {crit: critica, high: alta, med: media, low: baixa, info: info}
+  mapas:
+    - tipo: alerta
+      quando: "{Timestamp}"
+      fonte: "{Channel}"
+      descricao: "{RuleTitle}"
+      severidade: "{Level}"
+      origem_arquivo: "{EvtxFile}"
+      origem_local: "{RecordID}"
+      entidades:
+        - {tipo: host, valor: "{Computer}"}

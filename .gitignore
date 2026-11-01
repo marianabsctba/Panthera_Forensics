@@ -1,0 +1,7 @@
+/dist/
+*.exe
+/casos/
+/ferramentas/
+*.db
+*.db-wal
+*.db-shm

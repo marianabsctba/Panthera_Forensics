@@ -1,0 +1,30 @@
+contrato: 1
+nome: evtxecmd
+titulo: Leitura de logs do Windows
+versao: "2026-10-25"
+reconhece:
+  - tipo: evtx
+    magica_hex: "456c6646696c6500"
+    extensoes: [.evtx]
+consome: [evtx]
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/EvtxECmd.zip
+    sha256: 2a78384d8389277331513319df5efdef37dd7c7658e5be972b400648eb1e0f10
+comando:
+  windows:
+    exec: EvtxeCmd/EvtxECmd.exe
+    args: [-f, "{entrada}", --csv, "{saida}", --csvf, eventos.csv]
+saida:
+  arquivos: eventos.csv
+  formato: csv
+  mapas:
+    - tipo: evento
+      quando: "{TimeCreated}"
+      fonte: "{Channel}"
+      descricao: "Evento {EventId}: {MapDescription}"
+      origem_arquivo: "{SourceFile}"
+      origem_local: "{EventRecordId}"
+      entidades:
+        - {tipo: host, valor: "{Computer}"}
+        - {tipo: usuario, valor: "{UserName}"}

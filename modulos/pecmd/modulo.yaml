@@ -1,0 +1,26 @@
+contrato: 1
+nome: pecmd
+titulo: Programas executados
+versao: "2026-10-25"
+reconhece:
+  - tipo: prefetch
+    extensoes: [.pf]
+consome: [prefetch]
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/PECmd.zip
+    sha256: 0d5a0c9bd9aeba6738fabbb5bfa2ca360f924949eeb02fc55d9bc8bf3dcc88f3
+comando:
+  windows:
+    exec: PECmd.exe
+    args: [-f, "{entrada}", --csv, "{saida}", --csvf, prefetch.csv]
+saida:
+  arquivos: "*_Timeline.csv"
+  formato: csv
+  mapas:
+    - tipo: evento
+      quando: "{RunTime}"
+      fonte: Prefetch
+      descricao: "Programa executado: {ExecutableName}"
+      entidades:
+        - {tipo: arquivo, valor: "{ExecutableName}"}

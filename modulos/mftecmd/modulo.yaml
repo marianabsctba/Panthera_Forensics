@@ -1,0 +1,34 @@
+contrato: 1
+nome: mftecmd
+titulo: Leitura da tabela de arquivos
+versao: "2026-10-25"
+reconhece:
+  - tipo: mft
+    nomes: [$MFT]
+consome: [mft]
+instalar:
+  windows-amd64:
+    url: https://download.ericzimmermanstools.com/MFTECmd.zip
+    sha256: cf5892102c75df6000e87aec5653046f453f65846f361ee48ed1ab2771b0f1e3
+comando:
+  windows:
+    exec: MFTECmd.exe
+    args: [-f, "{entrada}", --csv, "{saida}", --csvf, mft.csv]
+saida:
+  arquivos: mft.csv
+  formato: csv
+  mapas:
+    - tipo: evento
+      quando: "{Created0x10}"
+      fonte: Tabela de arquivos
+      descricao: "Arquivo criado: {ParentPath}\\{FileName}"
+      origem_local: "{EntryNumber}"
+      entidades:
+        - {tipo: arquivo, valor: "{FileName}"}
+    - tipo: evento
+      quando: "{LastModified0x10}"
+      fonte: Tabela de arquivos
+      descricao: "Arquivo alterado: {ParentPath}\\{FileName}"
+      origem_local: "{EntryNumber}"
+      entidades:
+        - {tipo: arquivo, valor: "{FileName}"}

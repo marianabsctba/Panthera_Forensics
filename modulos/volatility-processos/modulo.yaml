@@ -1,0 +1,29 @@
+contrato: 1
+nome: volatility-processos
+titulo: Processos na memória
+versao: "2.28.2"
+ferramenta: volatility
+reconhece:
+  - tipo: memoria
+    extensoes: [.mem, .vmem]
+consome: [memoria]
+instalar:
+  windows-amd64:
+    url: https://github.com/volatilityfoundation/volatility3/releases/download/v2.28.2/volatility3-win-exes-2.28.2.zip
+    sha256: 7ccd2394589bf15d88fb20b242157b93771bce26c0b3aafbba8f2c168a337fa5
+comando:
+  windows:
+    exec: vol.exe
+    stdout: processos.jsonl
+    args: [-q, -r, jsonl, -f, "{entrada}", windows.pslist]
+saida:
+  arquivos: processos.jsonl
+  formato: jsonl
+  mapas:
+    - tipo: evento
+      quando: "{CreateTime}"
+      fonte: Memória
+      descricao: "Processo iniciado: {ImageFileName} (PID {PID}, pai {PPID})"
+      origem_local: "{Offset(V)}"
+      entidades:
+        - {tipo: arquivo, valor: "{ImageFileName}"}
