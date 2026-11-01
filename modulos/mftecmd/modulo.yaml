@@ -32,3 +32,20 @@ saida:
       origem_local: "{EntryNumber}"
       entidades:
         - {tipo: arquivo, valor: "{FileName}"}
+    - tipo: evento
+      quando: "{LastAccess0x10}"
+      fonte: Tabela de arquivos
+      descricao: "Arquivo acessado: {ParentPath}\\{FileName}"
+      origem_local: "{EntryNumber}"
+      entidades:
+        - {tipo: arquivo, valor: "{FileName}"}
+    # A MFT nao guarda a hora da exclusao. No DFR-01 do NIST, a data abaixo e 12 minutos
+    # anterior a exclusao real, entao o texto nao pode sugerir que ela e a exclusao.
+    - tipo: evento
+      se: {InUse: "False"}
+      quando: "{LastRecordChange0x10}"
+      fonte: Tabela de arquivos
+      descricao: "Arquivo apagado em momento desconhecido; esta é a última mudança antes disso: {ParentPath}\\{FileName}"
+      origem_local: "{EntryNumber}"
+      entidades:
+        - {tipo: arquivo, valor: "{FileName}"}

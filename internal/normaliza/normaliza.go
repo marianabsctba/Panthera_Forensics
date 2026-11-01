@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/marianabsctba/Panthera_Forensics/internal/modulo"
@@ -138,10 +139,13 @@ func lerCSV(s modulo.Saida, r io.Reader, entregar func(Registro) error) error {
 
 func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error) error {
 	for _, m := range s.Mapas {
+		if !condicaoAtendida(m.Se, linha) {
+			continue
+		}
 		bruto := expandir(m.Quando, linha)
 		// Um mapa com campo de data declarado e vazio nao gera registro: e o caso
 		// de uma linha da MFT sem a quarta data.
-		if m.Quando != "" && bruto == "" {
+		if m.Quando != "" && bruto == "" && !m.ManterSemData {
 			continue
 		}
 		r := Registro{
@@ -166,7 +170,15 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 			}
 		}
 		for _, e := range m.Entidades {
-			if v := strings.TrimSpace(expandir(e.Valor, linha)); v != "" {
+			v := expandir(e.Valor, linha)
+			if e.Remover != "" {
+				padrao, err := compilar(e.Remover)
+				if err != nil {
+					return err
+				}
+				v = padrao.ReplaceAllString(v, "")
+			}
+			if v = strings.TrimSpace(v); v != "" {
 				r.Entidades = append(r.Entidades, Entidade{Tipo: e.Tipo, Valor: v})
 			}
 		}
@@ -175,6 +187,15 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 		}
 	}
 	return nil
+}
+
+func condicaoAtendida(se map[string]string, linha map[string]any) bool {
+	for campo, esperado := range se {
+		if !strings.EqualFold(texto(buscar(linha, campo)), esperado) {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizarSeveridade(s modulo.Saida, bruto string) string {
@@ -189,6 +210,21 @@ func normalizarSeveridade(s modulo.Saida, bruto string) string {
 		return v
 	}
 	return "info"
+}
+
+var padroes sync.Map
+
+// compilar guarda as expressoes, porque cada uma e aplicada a todas as linhas.
+func compilar(expressao string) (*regexp.Regexp, error) {
+	if p, ok := padroes.Load(expressao); ok {
+		return p.(*regexp.Regexp), nil
+	}
+	p, err := regexp.Compile(expressao)
+	if err != nil {
+		return nil, err
+	}
+	padroes.Store(expressao, p)
+	return p, nil
 }
 
 var marcador = regexp.MustCompile(`\{([^{}]+)\}`)

@@ -21,6 +21,7 @@ saida:
   formato: jsonl
   mapas:
     - tipo: evento
+      manter_sem_data: true
       quando: "{CreateTime}"
       fonte: Memória
       descricao: "Processo iniciado: {ImageFileName} (PID {PID}, pai {PPID})"

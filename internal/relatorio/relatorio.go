@@ -166,7 +166,7 @@ th{font-weight:600}code{font:11px ui-monospace,Consolas,monospace;word-break:bre
 
 <h2>Metodologia</h2>
 <table><tr><th>Etapa</th><th>Módulo e versão</th><th>Estado</th><th>Registros</th><th>Início e fim (UTC)</th><th>Executável e parâmetros</th></tr>
-{{range .Execucoes}}<tr><td>{{.Titulo}}</td><td>{{.Modulo}} {{.Versao}}</td><td>{{.Estado}}{{if .Erro}}: {{.Erro}}{{end}}</td><td>{{.Registros}}</td><td>{{.Inicio}}<br>{{.Fim}}</td><td><code>SHA-256 {{.FerramentaSHA256}}<br>{{unir .Args}}</code></td></tr>
+{{range .Execucoes}}<tr><td>{{.Titulo}}</td><td>{{.Modulo}} {{.Versao}}</td><td>{{.Estado}}{{if .Erro}}: {{.Erro}}{{end}}{{if and (eq .Estado "concluida") (eq .Registros 0)}}<br><span class="ruim">Sem resultado. Isso não prova ausência de atividade.</span>{{end}}</td><td>{{.Registros}}</td><td>{{.Inicio}}<br>{{.Fim}}</td><td><code>SHA-256 {{.FerramentaSHA256}}<br>{{unir .Args}}</code></td></tr>
 {{end}}</table>
 {{range .NaoExecutados}}<p class="ruim">Não executado: {{index .Detalhes "modulo"}}. Motivo: {{index .Detalhes "motivo"}}.</p>{{end}}
 

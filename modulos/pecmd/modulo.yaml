@@ -23,4 +23,5 @@ saida:
       fonte: Prefetch
       descricao: "Programa executado: {ExecutableName}"
       entidades:
-        - {tipo: arquivo, valor: "{ExecutableName}"}
+        # So o nome do arquivo, para ligar com a mesma identidade vinda de outras fontes.
+        - {tipo: arquivo, valor: "{ExecutableName}", remover: '^.*\\'}

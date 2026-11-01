@@ -16,11 +16,11 @@ comando:
   windows:
     exec: hayabusa-*.exe
     dir: ferramenta
-    args: [json-timeline, -d, "{entrada}", -L, -o, "{saida}/alertas.jsonl", -w, -q, -U, -r, "{ferramenta}/rules"]
+    args: [dfir-timeline, -d, "{entrada}", -t, jsonl, -o, "{saida}/alertas.jsonl", -w, -q, -K, -O, -b, -p, verbose, -r, "{ferramenta}/rules"]
 saida:
   arquivos: alertas.jsonl
   formato: jsonl
-  severidades: {crit: critica, high: alta, med: media, low: baixa, info: info}
+  severidades: {crit: critica, critical: critica, high: alta, med: media, medium: media, low: baixa, info: info, informational: info}
   mapas:
     - tipo: alerta
       quando: "{Timestamp}"

@@ -10,11 +10,15 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Contrato de módulos, plano automático, reaproveitamento | Pronto, com testes usando uma ferramenta de teste |
 | Interface local e relatório | Prontos, conferidos no navegador com dados de demonstração |
 | Instalador com hash fixado | Pronto, com testes |
-| Módulos Hayabusa, EvtxECmd, MFTECmd, PECmd e Volatility | Escritos, **ainda não executados** com as ferramentas reais |
+| Módulos Hayabusa, EvtxECmd e PECmd | Executados com amostras públicas reais, sem gabarito formal |
+| Módulo MFTECmd | Testado com dados de referência do NIST, ver [validação](validacao/README.md) |
+| Módulos de memória (Volatility) | **Não validados**: não listam processos nas imagens do NIST, de 2005 e 2006 |
+| Leitura direta de imagem de disco | Não feita |
 | Coletor para a máquina-alvo | Não feito |
-| Validação com dados de referência do NIST | Não feita |
 
-Enquanto os módulos reais não forem executados, os campos mapeados nos manifestos são suposições a confirmar.
+## Antivírus
+
+Resultados de ferramentas citam trechos de ataques reais, e evidências podem conter malware. O Windows Defender já bloqueou um resultado do Hayabusa durante os testes e pode colocar evidência em quarentena. Guarde os casos em uma pasta dedicada, excluída do antivírus. A conferência de integridade acusa evidência que sumiu ou mudou.
 
 ## Uso
 

@@ -27,4 +27,4 @@ saida:
       origem_local: "{EventRecordId}"
       entidades:
         - {tipo: host, valor: "{Computer}"}
-        - {tipo: usuario, valor: "{UserName}"}
+        - {tipo: usuario, valor: "{UserName}", remover: '( \(S-1-[^)]*\)$)|(^-$)'}

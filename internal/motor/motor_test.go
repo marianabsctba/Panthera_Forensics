@@ -124,6 +124,9 @@ func TestFluxoCompleto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if detalhe.OrigemArquivo != "foto.jpg (evidência 1)" {
+		t.Fatalf("origem nao aponta para a evidencia: %q", detalhe.OrigemArquivo)
+	}
 	if detalhe.OrigemLocal != "20" || !bytes.Contains(detalhe.Dados, []byte("Log limpo")) || len(detalhe.Entidades) != 1 {
 		t.Fatalf("origem ou dados originais perdidos: %+v", detalhe)
 	}

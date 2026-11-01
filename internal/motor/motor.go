@@ -249,7 +249,7 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	if err := os.MkdirAll(dirSaida, 0o755); err != nil {
 		return false, m.falhar(c, id, md, err)
 	}
-	entrada, err := prepararEntrada(c, dirEntrada, md.Modo, t.Entradas)
+	entrada, origens, err := prepararEntrada(c, dirEntrada, md.Modo, t.Entradas)
 	if err != nil {
 		return false, m.falhar(c, id, md, err)
 	}
@@ -271,7 +271,7 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	if err := m.rodar(ctx, fer.exec, args, dirTrabalho, arquivoSaida, filepath.Join(dirExec, "stderr.log")); err != nil {
 		return false, m.falhar(c, id, md, err)
 	}
-	n, err := importar(c, id, md, dirSaida)
+	n, err := importar(c, id, md, dirSaida, origens)
 	if err != nil {
 		return false, m.falhar(c, id, md, fmt.Errorf("ao ler a saida: %w", err))
 	}
@@ -291,6 +291,7 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 }
 
 func (m *Motor) falhar(c *caso.Caso, id int64, md *modulo.Manifesto, causa error) error {
+	causa = caso.ExplicarAntivirus(causa)
 	fim := time.Now().UTC().Format(time.RFC3339)
 	// Uma importacao interrompida nao deixa registros parciais, porque ocorre em
 	// uma unica transacao; nada mais precisa ser desfeito aqui.
@@ -334,22 +335,49 @@ func (m *Motor) rodar(ctx context.Context, executavel string, args []string, dir
 
 // prepararEntrada expoe a evidencia com o nome original, sem copiar: um link fisico
 // para o arquivo do cofre, que e somente leitura.
-func prepararEntrada(c *caso.Caso, dir, modo string, entradas []caso.Evidencia) (string, error) {
+func prepararEntrada(c *caso.Caso, dir, modo string, entradas []caso.Evidencia) (string, *origens, error) {
 	var ultimo string
+	o := &origens{porCaminho: map[string]string{}}
 	for i, e := range entradas {
 		sub := filepath.Join(dir, fmt.Sprint(i))
 		if err := os.MkdirAll(sub, 0o755); err != nil {
-			return "", err
+			return "", nil, err
 		}
 		ultimo = filepath.Join(sub, nomeSeguro(e.Nome))
 		if err := os.Link(c.CaminhoEvidencia(e.SHA256), ultimo); err != nil {
-			return "", err
+			return "", nil, err
 		}
+		o.unica = fmt.Sprintf("%s (evidência %d)", e.Nome, e.ID)
+		o.porCaminho[normalizarCaminho(ultimo)] = o.unica
+	}
+	if len(entradas) != 1 {
+		o.unica = ""
 	}
 	if modo == "lote" {
-		return dir, nil
+		return dir, o, nil
 	}
-	return ultimo, nil
+	return ultimo, o, nil
+}
+
+// origens traduz o caminho de trabalho que a ferramenta viu para a evidencia real:
+// a pasta temporaria nao diz nada a quem le o achado ou o laudo.
+type origens struct {
+	porCaminho map[string]string
+	unica      string
+}
+
+func (o *origens) traduzir(caminho string) string {
+	if evidencia, ok := o.porCaminho[normalizarCaminho(caminho)]; ok {
+		return evidencia
+	}
+	if caminho == "" {
+		return o.unica
+	}
+	return caminho
+}
+
+func normalizarCaminho(caminho string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(caminho), `\`, "/"))
 }
 
 var inseguro = regexp.MustCompile(`[<>:"/\\|?*\x00-\x1f]`)
@@ -385,7 +413,7 @@ func chaveTarefa(md *modulo.Manifesto, shaFerramenta string, cmd modulo.Comando,
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func importar(c *caso.Caso, execucao int64, md *modulo.Manifesto, dirSaida string) (int64, error) {
+func importar(c *caso.Caso, execucao int64, md *modulo.Manifesto, dirSaida string, o *origens) (int64, error) {
 	arquivos, err := filepath.Glob(filepath.Join(dirSaida, filepath.FromSlash(md.Saida.Arquivos)))
 	if err != nil {
 		return 0, err
@@ -431,7 +459,7 @@ func importar(c *caso.Caso, execucao int64, md *modulo.Manifesto, dirSaida strin
 			if r.Quando != "" {
 				quando = r.Quando
 			}
-			res, err := inserir.Exec(execucao, r.Tipo, quando, r.QuandoBruto, r.Fonte, r.Descricao, r.Severidade, r.OrigemArquivo, r.OrigemLocal, string(dados))
+			res, err := inserir.Exec(execucao, r.Tipo, quando, r.QuandoBruto, r.Fonte, r.Descricao, r.Severidade, o.traduzir(r.OrigemArquivo), r.OrigemLocal, string(dados))
 			if err != nil {
 				return err
 			}

@@ -73,6 +73,11 @@ type Saida struct {
 // Mapa gera um registro por linha de saida. Um mesmo arquivo pode ter varios,
 // como uma linha da MFT que traz quatro datas diferentes.
 type Mapa struct {
+	// Se limita o mapa as linhas em que estas colunas tem estes valores.
+	Se map[string]string `yaml:"se"`
+	// ManterSemData preserva a linha mesmo sem data: um processo sem hora de inicio
+	// ainda e um achado, ao contrario de uma das quatro datas vazias da MFT.
+	ManterSemData bool           `yaml:"manter_sem_data"`
 	Tipo          string         `yaml:"tipo"`
 	Quando        string         `yaml:"quando"`
 	Fonte         string         `yaml:"fonte"`
@@ -87,6 +92,9 @@ type Mapa struct {
 type MapaEntidade struct {
 	Tipo  string `yaml:"tipo"`
 	Valor string `yaml:"valor"`
+	// Remover e uma expressao regular tirada do valor, para que a mesma identidade
+	// escrita de formas diferentes vire uma so. Valor que fica vazio nao gera entidade.
+	Remover string `yaml:"remover"`
 }
 
 var nomeValido = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
@@ -139,6 +147,13 @@ func (m *Manifesto) validar() error {
 		}
 	default:
 		return fmt.Errorf("%s: formato de saida %q desconhecido", m.Nome, m.Saida.Formato)
+	}
+	for _, mapa := range m.Saida.Mapas {
+		for _, e := range mapa.Entidades {
+			if _, err := regexp.Compile(e.Remover); err != nil {
+				return fmt.Errorf("%s: remover invalido: %w", m.Nome, err)
+			}
+		}
 	}
 	if m.Saida.Arquivos == "" {
 		return fmt.Errorf("%s: saida.arquivos e obrigatorio", m.Nome)

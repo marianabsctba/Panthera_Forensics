@@ -21,6 +21,7 @@ saida:
   formato: jsonl
   mapas:
     - tipo: evento
+      manter_sem_data: true
       quando: "{Created}"
       fonte: Memória
       descricao: "Conexão {Proto}: {LocalAddr}:{LocalPort} para {ForeignAddr}:{ForeignPort} ({State}), processo {Owner}"

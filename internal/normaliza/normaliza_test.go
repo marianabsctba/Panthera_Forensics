@@ -56,6 +56,38 @@ func TestJSONLComCampoAninhadoESeveridade(t *testing.T) {
 	}
 }
 
+func TestManterSemData(t *testing.T) {
+	s := modulo.Saida{Formato: "jsonl", Mapas: []modulo.Mapa{{Tipo: "evento", Quando: "{T}", Descricao: "{N}", ManterSemData: true}}}
+	r := coletar(t, s, `{"T":null,"N":"processo"}`+"\n")
+	if len(r) != 1 || r[0].Quando != "" {
+		t.Fatalf("registro sem data perdido: %+v", r)
+	}
+}
+
+func TestMapaCondicional(t *testing.T) {
+	s := modulo.Saida{Formato: "csv", Mapas: []modulo.Mapa{
+		{Tipo: "evento", Descricao: "visto {N}"},
+		{Tipo: "evento", Descricao: "apagado {N}", Se: map[string]string{"EmUso": "false"}},
+	}}
+	r := coletar(t, s, "N,EmUso\na,True\nb,False\n")
+	if len(r) != 3 || r[2].Descricao != "apagado b" {
+		t.Fatalf("condicao nao aplicada: %+v", r)
+	}
+}
+
+func TestEntidadeRemoveVariacao(t *testing.T) {
+	s := modulo.Saida{Formato: "csv", Mapas: []modulo.Mapa{{Tipo: "evento", Descricao: "x", Entidades: []modulo.MapaEntidade{
+		{Tipo: "usuario", Valor: "{U}", Remover: `( \(S-1-[^)]*\)$)|(^-$)`},
+	}}}}
+	r := coletar(t, s, "U\nBASE\\ana (S-1-5-18)\n-\n")
+	if r[0].Entidades[0].Valor != `BASE\ana` {
+		t.Fatalf("variacao mantida: %+v", r[0].Entidades)
+	}
+	if len(r[1].Entidades) != 0 {
+		t.Fatalf("valor vazio virou entidade: %+v", r[1].Entidades)
+	}
+}
+
 func TestDataIlegivelPreservaRegistro(t *testing.T) {
 	s := modulo.Saida{Formato: "contrato"}
 	r := coletar(t, s, `{"tipo":"evento","descricao":"x","quando":"ontem"}`+"\n")
