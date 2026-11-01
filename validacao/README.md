@@ -21,7 +21,7 @@ PANTHERA_HOME=<pasta com ferramentas> PANTHERA_DADOS=<pasta de dados> go test -t
 - **Passam:** Q1 hash, Q2 sistema, Q3 instalação, Q4 fuso, Q5 dono, Q6 computador, Q8 desligamento, Q9 contas, Q11 último usuário, Q12 arquivo do Look@LAN, Q16 programas, Q22 canais de IRC, Q23 arquivo interceptado, Q27 cópia de e-mail e Q28 executáveis na lixeira.
 - **Diverge:** na Q30, o gabarito diz 3 arquivos apagados, e o The Sleuth Kit lista 70 entradas apagadas com metadados. A causa não foi confirmada, e o número não foi ajustado.
 - **Não testadas:** Q7, Q10, Q13 a Q15, Q17 a Q21, Q24 a Q26, Q29 e Q31. A maioria depende de ler o conteúdo dos arquivos, e a Q31 depende de antivírus.
-- **Alcance:** Q12, Q16, Q22, Q23 e Q27 confirmam que os arquivos aparecem na listagem. Elas não demonstram que o perito os encontraria pela busca, porque o teste já sabe o que procurar. A Q12 pede uma busca no conteúdo, que ainda não existe.
+- **Alcance:** Q12, Q16, Q22, Q23 e Q27 confirmam que os arquivos aparecem na listagem, e a busca da tela encontra os nomes testados. Como o teste já sabe o que procurar, isso não demonstra que um exame sem o gabarito chegaria a eles. A Q12 pede uma busca no conteúdo dos arquivos, que ainda não existe.
 
 ### Memória
 

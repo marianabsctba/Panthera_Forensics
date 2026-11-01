@@ -157,6 +157,22 @@ func TestHackingCase(t *testing.T) {
 		}
 		t.Errorf("nao encontrado na listagem: %s", fragmento)
 	}
+	// Pela mesma busca que a perita usa na tela, e nao pela lista crua.
+	buscavel := func(t *testing.T, termo string) {
+		t.Helper()
+		achou, err := c.Consultar(caso.Filtro{Texto: termo, Limite: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(achou) == 0 {
+			t.Errorf("a busca nao encontra: %s", termo)
+		}
+	}
+	t.Run("Busca encontra arquivos do caso", func(t *testing.T) {
+		for _, termo := range []string{"interception", "irunin.ini", "Look@LAN", "showletter[1].htm", "N-1A9ODN6ZXK4LQ"} {
+			buscavel(t, termo)
+		}
+	})
 	t.Run("Q12 arquivo do Look@LAN", func(t *testing.T) { existe(t, "Look@LAN/irunin.ini") })
 	t.Run("Q16 programas instalados", func(t *testing.T) {
 		for _, p := range []string{"Program Files/Cain", "Program Files/Ethereal", "Program Files/Look@LAN", "Program Files/Network Stumbler", "Program Files/Anonymizer"} {

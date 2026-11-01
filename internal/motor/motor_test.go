@@ -161,6 +161,36 @@ func TestNaoRepeteMesmaTarefa(t *testing.T) {
 	}
 }
 
+func TestBuscaAchaParteDoCaminhoEValoresTecnicos(t *testing.T) {
+	_, c := montar(t)
+	res, err := c.DB.Exec(`INSERT INTO execucoes(chave,modulo,titulo,versao,estado,inicio) VALUES('k','m','t','1','concluida','agora')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	x, _ := res.LastInsertId()
+	descricao := `Arquivo criado: /Documents and Settings/Mr. Evil/interception 192.168.1.111 N-1A9ODN6ZXK4LQ aee4fcd9`
+	res, err = c.DB.Exec(`INSERT INTO registros(execucao_id,tipo,descricao) VALUES(?,'evento',?)`, x, descricao)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := res.LastInsertId()
+	if _, err := c.DB.Exec(`INSERT INTO busca(rowid,descricao,fonte,dados) VALUES(?,?,'','{}')`, id, descricao); err != nil {
+		t.Fatal(err)
+	}
+	for _, termo := range []string{"interception", "INTERCEPTION", "Mr. Evil/interception", "192.168.1.111", "N-1A9ODN6ZXK4LQ", "aee4fcd9"} {
+		achou, err := c.Consultar(caso.Filtro{Texto: termo})
+		if err != nil {
+			t.Fatalf("%s: %v", termo, err)
+		}
+		if len(achou) != 1 {
+			t.Errorf("busca por %q devolveu %d", termo, len(achou))
+		}
+	}
+	if achou, _ := c.Consultar(caso.Filtro{Texto: "192.168.1.112"}); len(achou) != 0 {
+		t.Error("IP diferente nao deveria ser encontrado")
+	}
+}
+
 func TestMesmaPastaJuntaArquivosDaOrigem(t *testing.T) {
 	historico := caso.Evidencia{ID: 1, Nome: "History", Origem: `D:\perfil\Default\History`}
 	todas := []caso.Evidencia{

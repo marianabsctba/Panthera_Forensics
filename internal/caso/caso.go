@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS registro_entidade(
   registro_id INTEGER NOT NULL REFERENCES registros(id), entidade_id INTEGER NOT NULL REFERENCES entidades(id),
   PRIMARY KEY(registro_id, entidade_id)) WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS entidade_registros ON registro_entidade(entidade_id);
-CREATE VIRTUAL TABLE IF NOT EXISTS busca USING fts5(descricao, fonte, dados, tokenize="unicode61 tokenchars '.-_:\\/'");
+CREATE VIRTUAL TABLE IF NOT EXISTS busca USING fts5(descricao, fonte, dados);
 `
 
 // Criar inicia um caso novo dentro de raiz.
