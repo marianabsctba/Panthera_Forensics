@@ -24,3 +24,7 @@ saida:
       fonte: "Registro: {Category}"
       descricao: "{Description}: {ValueName} = {ValueData}"
       origem_local: "{KeyPath}"
+      entidades:
+        - {tipo: host, valor: "{ValueData}", se: {ValueName: ComputerName}}
+        - {tipo: usuario, valor: "{ValueData}", se: {ValueName: DefaultUserName}}
+        - {tipo: usuario, valor: "{ValueData}", se: {Description: User Accounts (SAM), ValueName: V}, remover: '^Username: | Id: .*$'}

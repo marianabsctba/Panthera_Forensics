@@ -137,6 +137,12 @@ func TestDatasDasFerramentasDeRede(t *testing.T) {
 			t.Errorf("%s: esperado %s, obtido %s", bruto, esperado, obtido)
 		}
 	}
+	if q, ok := interpretarData("Tue Feb 29 18:14:00 UTC 2000"); !ok || !strings.HasPrefix(q, "2000-02-29T18:14:00") {
+		t.Errorf("data do Java em UTC: %s", q)
+	}
+	if q, ok := interpretarData("Tue Feb 29 15:14:00 BRT 2000"); ok {
+		t.Errorf("fuso ambiguo aceito: %s", q)
+	}
 	if _, ok := interpretarData("12345"); ok {
 		t.Error("numero curto nao e data")
 	}

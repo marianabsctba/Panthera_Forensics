@@ -3,6 +3,8 @@ nome: plaso
 titulo: Linha do tempo completa do disco
 versao: "wsl"
 requer_wsl: true
+# A parte mais lenta da analise: cerca de 13 dos 17 minutos em um disco de 1,1 GB.
+opcional: true
 reconhece:
   - tipo: disco
     magica_hex: "455646090d0aff00"

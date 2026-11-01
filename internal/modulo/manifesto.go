@@ -37,6 +37,10 @@ type Manifesto struct {
 	IgnorarDerivados bool `yaml:"ignorar_derivados"`
 	// RequerWSL indica que a ferramenta roda no ambiente Linux dedicado.
 	RequerWSL bool `yaml:"requer_wsl"`
+	// Opcional deixa o modulo fora da analise padrao: so roda no exame profundo.
+	Opcional bool `yaml:"opcional"`
+	// Abrir aponta para um programa de analise que a ferramenta deixa na pasta de saida.
+	Abrir string `yaml:"abrir"`
 
 	// Dir e a pasta do manifesto, quando ele vem do disco.
 	Dir string `yaml:"-"`
@@ -133,6 +137,8 @@ type MapaEntidade struct {
 	// Remover e uma expressao regular tirada do valor, para que a mesma identidade
 	// escrita de formas diferentes vire uma so. Valor que fica vazio nao gera entidade.
 	Remover string `yaml:"remover"`
+	// Se limita esta entidade as linhas em que estas colunas tem estes valores.
+	Se map[string]string `yaml:"se"`
 }
 
 var nomeValido = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)

@@ -30,7 +30,7 @@ saida:
   mapas:
     - tipo: alerta
       fonte: Assinaturas
-      descricao: "{identifier}: {meta.description}"
+      descricao: "{meta.description} ({identifier})"
       severidade: "{meta.score}"
       origem_arquivo: "{pai.path}"
       entidades:

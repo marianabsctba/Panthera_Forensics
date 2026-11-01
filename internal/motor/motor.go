@@ -35,8 +35,20 @@ type Motor struct {
 	TempoMaximo    time.Duration
 	// Nucleo e o executavel usado por modulos com exec "{nucleo}". Vazio usa o atual.
 	Nucleo string
+	// RefazerFalhas tenta de novo o que ja falhou, por exemplo depois de ajustar o antivirus.
+	RefazerFalhas bool
+	// Profundo inclui os modulos opcionais, mais pesados, na analise.
+	Profundo bool
 
 	verificados sync.Map
+}
+
+// Variante cria um motor so para um pedido, sem mudar o que os outros casos usam.
+func (m *Motor) Variante(refazer, profundo bool) *Motor {
+	return &Motor{
+		Modulos: m.Modulos, DirFerramentas: m.DirFerramentas, TempoMaximo: m.TempoMaximo,
+		Nucleo: m.Nucleo, RefazerFalhas: refazer, Profundo: profundo,
+	}
 }
 
 // maximoRodadas limita a cadeia de derivados: uma evidencia que gera outra que gera
@@ -131,6 +143,9 @@ func (m *Motor) Planejar(c *caso.Caso) ([]Tarefa, Resultado, error) {
 	}
 	var tarefas []Tarefa
 	for _, md := range m.Modulos {
+		if md.Opcional && !m.Profundo {
+			continue
+		}
 		var entradas []caso.Evidencia
 		for _, tipo := range md.Consome {
 			for _, e := range porTipo[tipo] {
@@ -427,6 +442,19 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 		return false, err
 	}
 
+	// A mesma entrada com a mesma ferramenta tende a falhar igual: repetir so duplicaria
+	// o erro a cada evidencia nova. Tentar de novo e uma decisao de quem esta no caso.
+	if !m.RefazerFalhas {
+		var erroAnterior string
+		err = c.DB.QueryRow(`SELECT erro FROM execucoes WHERE chave=? AND estado='falhou' ORDER BY id DESC LIMIT 1`, chave).Scan(&erroAnterior)
+		if err == nil {
+			return false, errors.New(erroAnterior)
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return false, err
+		}
+	}
+
 	inicio := time.Now().UTC().Format(time.RFC3339)
 	res, err := c.DB.Exec(`INSERT INTO execucoes(chave,modulo,titulo,versao,ferramenta_sha256,args,estado,inicio) VALUES(?,?,?,?,?,?,?,?)`,
 		chave, md.Nome, md.Titulo, versao, shaFerramenta, "[]", "rodando", inicio)
@@ -462,7 +490,9 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	}
 	parcial := ""
 	if err := m.rodar(ctx, fer.exec, args, dirTrabalho, arquivoSaida, filepath.Join(dirExec, "stderr.log")); err != nil {
-		if !comando.ParcialAceita || ctx.Err() != nil || !temSaida(md, dirSaida) {
+		// Pode nao haver nada a aproveitar: uma captura cortada sem nenhum pedido ainda e
+		// uma leitura parcial, e o aviso com a mensagem da ferramenta aparece na tela.
+		if !comando.ParcialAceita || ctx.Err() != nil {
 			return false, m.falhar(c, id, md, err)
 		}
 		parcial = "leitura parcial: " + ultimaLinha(filepath.Join(dirExec, "stderr.log"))
@@ -501,20 +531,6 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 		"args": args, "entradas": shas, "registros": n, "parcial": parcial,
 	})
 	return false, err
-}
-
-// temSaida diz se a ferramenta chegou a escrever algum resultado.
-func temSaida(md *modulo.Manifesto, dirSaida string) bool {
-	achados, err := filepath.Glob(filepath.Join(dirSaida, filepath.FromSlash(md.Saida.Arquivos)))
-	if err != nil {
-		return false
-	}
-	for _, a := range achados {
-		if i, err := os.Stat(a); err == nil && i.Size() > 0 {
-			return true
-		}
-	}
-	return false
 }
 
 func ultimaLinha(caminho string) string {

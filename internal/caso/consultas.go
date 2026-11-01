@@ -50,6 +50,50 @@ type Filtro struct {
 	Limite     int
 	Deslocar   int
 	Ordem      string
+	// De e Ate limitam o periodo por prefixo de data em UTC, como "2004-08".
+	De       string
+	Ate      string
+	Fonte    string
+	Marcados bool
+}
+
+// condicoes monta o WHERE comum as consultas de registros.
+func (f Filtro) condicoes() (de string, onde []string, args []any) {
+	de = `registros r JOIN execucoes x ON x.id=r.execucao_id`
+	if t := termosBusca(f.Texto); t != "" {
+		de += ` JOIN busca b ON b.rowid=r.id`
+		onde = append(onde, `busca MATCH ?`)
+		args = append(args, t)
+	}
+	if f.Tipo != "" {
+		onde = append(onde, `r.tipo=?`)
+		args = append(args, f.Tipo)
+	}
+	if f.Severidade != "" {
+		onde = append(onde, `r.severidade=?`)
+		args = append(args, f.Severidade)
+	}
+	if f.EntidadeID != 0 {
+		onde = append(onde, `r.id IN (SELECT registro_id FROM registro_entidade WHERE entidade_id=?)`)
+		args = append(args, f.EntidadeID)
+	}
+	if f.De != "" {
+		onde = append(onde, `r.quando>=?`)
+		args = append(args, f.De)
+	}
+	if f.Ate != "" {
+		// O til vem depois de digitos e letras: inclui tudo o que comeca com o prefixo.
+		onde = append(onde, `r.quando<?`)
+		args = append(args, f.Ate+"~")
+	}
+	if f.Fonte != "" {
+		onde = append(onde, `r.fonte=?`)
+		args = append(args, f.Fonte)
+	}
+	if f.Marcados {
+		onde = append(onde, `r.id IN (SELECT registro_id FROM marcacoes)`)
+	}
+	return de, onde, args
 }
 
 const colunas = `r.id,r.tipo,COALESCE(r.quando,''),r.quando_bruto,r.fonte,r.descricao,r.severidade,r.origem_arquivo,r.origem_local,x.titulo`
@@ -60,7 +104,8 @@ const ordemSeveridade = `CASE r.severidade WHEN 'critica' THEN 0 WHEN 'alta' THE
 // Resumir conta o que existe no caso.
 func (c *Caso) Resumir() (Resumo, error) {
 	r := Resumo{Alertas: map[string]int64{}}
-	err := c.DB.QueryRow(`SELECT COUNT(*),COALESCE(MIN(quando),''),COALESCE(MAX(quando),'') FROM registros`).Scan(&r.Registros, &r.Inicio, &r.Fim)
+	limite := limiteFuturo()
+	err := c.DB.QueryRow(`SELECT COUNT(*),COALESCE(MIN(CASE WHEN quando<? THEN quando END),''),COALESCE(MAX(CASE WHEN quando<? THEN quando END),'') FROM registros`, limite, limite).Scan(&r.Registros, &r.Inicio, &r.Fim)
 	if err != nil {
 		return r, err
 	}
@@ -94,26 +139,7 @@ func (c *Caso) Consultar(f Filtro) ([]Linha, error) {
 	if f.Limite <= 0 || f.Limite > 1000 {
 		f.Limite = 200
 	}
-	var onde []string
-	var args []any
-	de := `registros r JOIN execucoes x ON x.id=r.execucao_id`
-	if t := termosBusca(f.Texto); t != "" {
-		de += ` JOIN busca b ON b.rowid=r.id`
-		onde = append(onde, `busca MATCH ?`)
-		args = append(args, t)
-	}
-	if f.Tipo != "" {
-		onde = append(onde, `r.tipo=?`)
-		args = append(args, f.Tipo)
-	}
-	if f.Severidade != "" {
-		onde = append(onde, `r.severidade=?`)
-		args = append(args, f.Severidade)
-	}
-	if f.EntidadeID != 0 {
-		onde = append(onde, `r.id IN (SELECT registro_id FROM registro_entidade WHERE entidade_id=?)`)
-		args = append(args, f.EntidadeID)
-	}
+	de, onde, args := f.condicoes()
 	q := `SELECT ` + colunas + ` FROM ` + de
 	if len(onde) > 0 {
 		q += ` WHERE ` + strings.Join(onde, ` AND `)

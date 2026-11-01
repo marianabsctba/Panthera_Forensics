@@ -332,6 +332,9 @@ func aplicar(s modulo.Saida, linha map[string]any, entregar func(Registro) error
 			}
 		}
 		for _, e := range m.Entidades {
+			if !condicaoAtendida(e.Se, linha) {
+				continue
+			}
 			v := expandir(e.Valor, linha)
 			if e.Remover != "" {
 				padrao, err := compilar(e.Remover)
@@ -475,6 +478,9 @@ var formatosComFuso = []string{
 	"2006-01-02 15:04:05.999999999 -07:00",
 	"2006-01-02 15:04:05.999999999 Z07:00",
 	"2006-01-02T15:04:05.999999999-0700",
+	// Data do Java com UTC fixo. Outras abreviacoes de fuso sao ambiguas, e de proposito
+	// nao entram: seria melhor mostrar o valor original do que uma hora errada.
+	"Mon Jan 02 15:04:05 UTC 2006",
 }
 
 var formatosSemFuso = []string{

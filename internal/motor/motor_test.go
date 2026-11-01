@@ -191,6 +191,57 @@ func TestBuscaAchaParteDoCaminhoEValoresTecnicos(t *testing.T) {
 	}
 }
 
+func TestFalhaNaoRepeteSemPedir(t *testing.T) {
+	m, c := montar(t)
+	adicionar(t, c, "ruim.bin", "FAKE QUEBRAR")
+	contar := func() (n int) {
+		if err := c.DB.QueryRow(`SELECT COUNT(*) FROM execucoes WHERE estado='falhou'`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	for i := 0; i < 2; i++ {
+		res, err := m.Processar(context.Background(), c, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Falhas) != 1 {
+			t.Fatalf("a falha precisa continuar sendo informada: %+v", res)
+		}
+	}
+	if n := contar(); n != 1 {
+		t.Fatalf("falha repetida sem pedido: %d", n)
+	}
+	m.RefazerFalhas = true
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	if n := contar(); n != 2 {
+		t.Fatalf("pedido de refazer ignorado: %d", n)
+	}
+}
+
+func TestModuloOpcionalSoRodaNoExameProfundo(t *testing.T) {
+	m, c := montar(t)
+	m.Modulos[0].Opcional = true
+	adicionar(t, c, "a.bin", "FAKE a")
+	res, err := m.Processar(context.Background(), c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Executadas != 0 {
+		t.Fatalf("opcional rodou na analise padrao: %+v", res)
+	}
+	m.Profundo = true
+	res, err = m.Processar(context.Background(), c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Executadas != 1 {
+		t.Fatalf("opcional nao rodou no exame profundo: %+v", res)
+	}
+}
+
 func TestAgruparSegmentosDeImagem(t *testing.T) {
 	grupos := agruparSegmentos([]caso.Evidencia{
 		{ID: 1, Nome: "disco.E02"}, {ID: 2, Nome: "disco.E01"}, {ID: 3, Nome: "outro.dd"},

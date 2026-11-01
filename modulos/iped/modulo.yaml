@@ -1,0 +1,50 @@
+contrato: 1
+nome: iped
+titulo: Exame profundo do conteúdo
+versao: "4.3.1"
+# Pesado: 1,1 GB instalado, e mais 700 MB em cada caso, que leva uma copia do programa.
+opcional: true
+reconhece:
+  - tipo: disco
+    magica_hex: "455646090d0aff00"
+    extensoes: [.dd, .e01, .001, .002, .003, .004, .005, .006, .007, .008, .009, .010, .011, .012]
+consome: [disco]
+modo: imagem
+instalar:
+  windows-amd64:
+    url: https://github.com/sepinf-inc/IPED/releases/download/4.3.1/IPED-4.3.1_and_java_plugins.zip
+    sha256: e8ee71e7e2e41a770b521bfbaabf0cf0b88add5febff27c5a5ad375248cfef8e
+comando:
+  windows:
+    exec: iped-4.3.1/jre/bin/java.exe
+    dir: ferramenta
+    # UTC fixo: no fuso local, as datas saem com abreviacoes ambiguas, como BRST. Sem
+    # --downloadInternetData, de proposito: o exame nao pode fazer contato externo.
+    args: [-Duser.timezone=UTC, -Duser.language=en, -jar, "{ferramenta}/iped-4.3.1/iped.jar", -d, "{entrada}", -o, "{saida}/exame", --nogui, --nologfile]
+# Programa de analise que a propria ferramenta deixa pronto na saida.
+abrir: exame/IPED-SearchApp.exe
+saida:
+  arquivos: exame/FileList.csv
+  formato: csv
+  mapas:
+    - tipo: evento
+      manter_sem_data: true
+      quando: "{Modified}"
+      fonte: "Exame profundo: {Category}"
+      descricao: "{Path}"
+      origem_local: "{TrackId}"
+      entidades:
+        - {tipo: arquivo, valor: "{Name}"}
+    - tipo: evento
+      se: {Deleted: "true"}
+      manter_sem_data: true
+      quando: "{Modified}"
+      fonte: "Exame profundo: apagados"
+      descricao: "Arquivo apagado, data da última alteração: {Path}"
+      origem_local: "{TrackId}"
+    - tipo: evento
+      se: {Carved: "true"}
+      manter_sem_data: true
+      fonte: "Exame profundo: recuperados"
+      descricao: "Arquivo recuperado do espaço livre: {Path}"
+      origem_local: "{TrackId}"

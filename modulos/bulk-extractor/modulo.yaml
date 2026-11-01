@@ -17,7 +17,8 @@ instalar:
 comando:
   windows:
     exec: bulk_extractor64.exe
-    args: [-o, "{saida}/vestigios", "{entrada}"]
+    # Sem recuperar executaveis e pacotes: o exame nao usa esses arquivos, e malware real gravado em disco so provoca o antivirus.
+    args: [-S, evtx_carved_carve_mode=0, -S, jpeg_carve_mode=0, -S, kml_carved_carve_mode=0, -S, ntfsindx_carved_carve_mode=0, -S, ntfslogfile_carved_carve_mode=0, -S, ntfsmft_carved_carve_mode=0, -S, ntfsusn_carved_carve_mode=0, -S, rar_carve_mode=0, -S, rtti_carve_mode=0, -S, sqlite_carved_carve_mode=0, -S, unrar_carved_carve_mode=0, -S, utmp_carved_carve_mode=0, -S, vcard_carve_mode=0, -S, winpe_carved_carve_mode=0, -S, zip_carved_carve_mode=0, -o, "{saida}/vestigios", "{entrada}"]
 saida:
   arquivos: vestigios/*.txt
   # Listas pequenas e de alto valor. As demais ficam preservadas na saida bruta.

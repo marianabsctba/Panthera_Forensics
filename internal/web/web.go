@@ -15,8 +15,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -98,10 +100,17 @@ func (s *Servidor) Handler(endereco string) http.Handler {
 	mux.HandleFunc("GET /api/casos/{id}/resumo", s.comCaso(s.resumo))
 	mux.HandleFunc("GET /api/casos/{id}/registros", s.comCaso(s.registros))
 	mux.HandleFunc("GET /api/casos/{id}/registros/{rid}", s.comCaso(s.detalhe))
+	mux.HandleFunc("POST /api/casos/{id}/registros/{rid}/marca", s.comCaso(s.marcar))
+	mux.HandleFunc("GET /api/casos/{id}/atividade", s.comCaso(s.atividade))
+	mux.HandleFunc("GET /api/casos/{id}/fontes", s.comCaso(s.fontes))
+	mux.HandleFunc("GET /api/casos/{id}/visao", s.comCaso(s.visao))
+	mux.HandleFunc("GET /api/casos/{id}/conexoes", s.comCaso(s.conexoes))
 	mux.HandleFunc("GET /api/casos/{id}/entidades", s.comCaso(s.entidades))
 	mux.HandleFunc("GET /api/casos/{id}/evidencias", s.comCaso(s.evidencias))
 	mux.HandleFunc("POST /api/casos/{id}/evidencias", s.comCaso(s.enviarEvidencia))
 	mux.HandleFunc("POST /api/casos/{id}/processar", s.comCaso(s.processar))
+	mux.HandleFunc("GET /api/casos/{id}/aprofundar", s.comCaso(s.aprofundar))
+	mux.HandleFunc("POST /api/casos/{id}/abrir-analise", s.comCaso(s.abrirAnalise))
 	mux.HandleFunc("GET /api/casos/{id}/estado", s.comCaso(s.estado))
 	mux.HandleFunc("POST /api/casos/{id}/verificar", s.comCaso(s.verificar))
 	mux.HandleFunc("GET /casos/{id}/relatorio", s.comCaso(s.relatorio))
@@ -224,19 +233,86 @@ func (s *Servidor) resumo(w http.ResponseWriter, _ *http.Request, c *caso.Caso) 
 }
 
 func (s *Servidor) registros(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
-	q := r.URL.Query()
-	entidade, _ := strconv.ParseInt(q.Get("entidade"), 10, 64)
-	limite, _ := strconv.Atoi(q.Get("limite"))
-	deslocar, _ := strconv.Atoi(q.Get("deslocar"))
-	linhas, err := c.Consultar(caso.Filtro{
-		Texto: q.Get("q"), Tipo: q.Get("tipo"), Severidade: q.Get("severidade"),
-		EntidadeID: entidade, Limite: limite, Deslocar: deslocar, Ordem: q.Get("ordem"),
-	})
+	linhas, err := c.Consultar(filtroDe(r))
 	if err != nil {
 		falhar(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	responder(w, linhas)
+}
+
+func filtroDe(r *http.Request) caso.Filtro {
+	q := r.URL.Query()
+	entidade, _ := strconv.ParseInt(q.Get("entidade"), 10, 64)
+	limite, _ := strconv.Atoi(q.Get("limite"))
+	deslocar, _ := strconv.Atoi(q.Get("deslocar"))
+	return caso.Filtro{
+		Texto: q.Get("q"), Tipo: q.Get("tipo"), Severidade: q.Get("severidade"),
+		EntidadeID: entidade, Limite: limite, Deslocar: deslocar, Ordem: q.Get("ordem"),
+		De: q.Get("de"), Ate: q.Get("ate"), Fonte: q.Get("fonte"), Marcados: q.Get("marcados") == "1",
+	}
+}
+
+func (s *Servidor) atividade(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	a, err := c.Atividade(filtroDe(r))
+	if err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	responder(w, a)
+}
+
+func (s *Servidor) fontes(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	lista, err := c.Fontes(filtroDe(r))
+	if err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	responder(w, lista)
+}
+
+func (s *Servidor) visao(w http.ResponseWriter, _ *http.Request, c *caso.Caso) {
+	v, err := c.Visao()
+	if err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	responder(w, v)
+}
+
+func (s *Servidor) conexoes(w http.ResponseWriter, _ *http.Request, c *caso.Caso) {
+	m, err := c.Conexoes(30)
+	if err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	responder(w, m)
+}
+
+func (s *Servidor) marcar(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	id, err := strconv.ParseInt(r.PathValue("rid"), 10, 64)
+	if err != nil {
+		falhar(w, http.StatusNotFound, "Registro não encontrado.")
+		return
+	}
+	var p struct {
+		Marcado bool
+		Nota    string
+	}
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		falhar(w, http.StatusBadRequest, "Dados inválidos.")
+		return
+	}
+	if p.Marcado {
+		err = c.Marcar(id, p.Nota)
+	} else {
+		err = c.Desmarcar(id)
+	}
+	if err != nil {
+		falhar(w, http.StatusNotFound, "Não foi possível guardar a marcação.")
+		return
+	}
+	responder(w, map[string]bool{"ok": true})
 }
 
 func (s *Servidor) detalhe(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
@@ -250,7 +326,16 @@ func (s *Servidor) detalhe(w http.ResponseWriter, r *http.Request, c *caso.Caso)
 		falhar(w, http.StatusNotFound, "Registro não encontrado.")
 		return
 	}
-	responder(w, l)
+	marcado, nota, err := c.NotaDe(id)
+	if err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	responder(w, struct {
+		caso.Linha
+		Marcado bool   `json:"marcado"`
+		Nota    string `json:"nota"`
+	}{l, marcado, nota})
 }
 
 func (s *Servidor) entidades(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
@@ -297,7 +382,9 @@ func (s *Servidor) enviarEvidencia(w http.ResponseWriter, r *http.Request, c *ca
 	responder(w, novas)
 }
 
-func (s *Servidor) processar(w http.ResponseWriter, _ *http.Request, c *caso.Caso) {
+func (s *Servidor) processar(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
+	refazer := r.URL.Query().Get("refazer") == "1"
+	profundo := r.URL.Query().Get("profundo") == "1"
 	id := c.Info.ID
 	s.mu.Lock()
 	e, ok := s.estados[id]
@@ -314,13 +401,28 @@ func (s *Servidor) processar(w http.ResponseWriter, _ *http.Request, c *caso.Cas
 	}
 	e.Rodando, e.Erro, e.Resultado = true, "", nil
 	s.mu.Unlock()
-	go s.rodar(c, e)
+	go s.rodar(c, e, refazer, profundo)
 	responder(w, map[string]bool{"iniciado": true})
 }
 
-func (s *Servidor) rodar(c *caso.Caso, e *Estado) {
+func (s *Servidor) rodar(c *caso.Caso, e *Estado, refazer, profundo bool) {
+	m := s.Motor
+	if refazer || profundo {
+		m = s.Motor.Variante(refazer, profundo)
+	}
+	if profundo {
+		s.mu.Lock()
+		e.Etapa, e.Feitas, e.Total = "Preparando o exame profundo", 0, 1
+		s.mu.Unlock()
+		if err := InstalarOpcionais(context.Background(), s.Motor.Modulos, s.Motor.DirFerramentas); err != nil {
+			s.mu.Lock()
+			e.Erro, e.Rodando = "Não foi possível preparar o exame profundo: "+err.Error(), false
+			s.mu.Unlock()
+			return
+		}
+	}
 	for {
-		res, err := s.Motor.Processar(context.Background(), c, func(etapa string, feitas, total int) {
+		res, err := m.Processar(context.Background(), c, func(etapa string, feitas, total int) {
 			s.mu.Lock()
 			e.Etapa, e.Feitas, e.Total = etapa, feitas, total
 			s.mu.Unlock()
@@ -380,6 +482,10 @@ func (s *Servidor) listarModulos(w http.ResponseWriter, _ *http.Request) {
 	itens := []item{}
 	pendentes := 0
 	for _, m := range s.Motor.Modulos {
+		// Opcionais so sao preparados quando o exame profundo e pedido.
+		if m.Opcional {
+			continue
+		}
 		_, roda := m.ComandoAtual()
 		_, temPacote := m.PacoteAtual()
 		inst := instalador.Instalado(m, s.Motor.DirFerramentas) || (!temPacote && m.Dir != "")
@@ -422,6 +528,9 @@ func InstalarTodos(ctx context.Context, lista []*modulo.Manifesto, dir string) e
 	var erros []error
 	precisaWSL := false
 	for _, m := range lista {
+		if m.Opcional {
+			continue
+		}
 		precisaWSL = precisaWSL || m.RequerWSL
 		if err := instalador.Instalar(ctx, m, dir); err != nil {
 			erros = append(erros, fmt.Errorf("%s: %w", m.Titulo, err))
@@ -433,6 +542,92 @@ func InstalarTodos(ctx context.Context, lista []*modulo.Manifesto, dir string) e
 		}
 	}
 	return errors.Join(erros...)
+}
+
+// InstalarOpcionais prepara o que so o exame profundo usa.
+func InstalarOpcionais(ctx context.Context, lista []*modulo.Manifesto, dir string) error {
+	var erros []error
+	precisaWSL := false
+	for _, m := range lista {
+		if !m.Opcional {
+			continue
+		}
+		precisaWSL = precisaWSL || m.RequerWSL
+		if err := instalador.Instalar(ctx, m, dir); err != nil {
+			erros = append(erros, fmt.Errorf("%s: %w", m.Titulo, err))
+		}
+	}
+	if precisaWSL {
+		if err := instalador.PrepararWSL(ctx, dirWSL(dir), modulos.PrepararWSL); err != nil {
+			erros = append(erros, fmt.Errorf("Ambiente Linux: %w", err))
+		}
+	}
+	return errors.Join(erros...)
+}
+
+// aprofundar diz se o exame profundo se aplica a este caso e o que ja pode ser aberto.
+func (s *Servidor) aprofundar(w http.ResponseWriter, _ *http.Request, c *caso.Caso) {
+	evidencias, err := c.Evidencias()
+	if err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	tipos := map[string]bool{}
+	for _, e := range evidencias {
+		tipos[e.Tipo] = true
+	}
+	aplicavel := false
+	for _, m := range s.Motor.Modulos {
+		if m.Opcional {
+			aplicavel = aplicavel || slices.ContainsFunc(m.Consome, func(t string) bool { return tipos[t] })
+		}
+	}
+	_, pronto := s.programaAnalise(c)
+	responder(w, map[string]bool{"aplicavel": aplicavel, "pronto": pronto})
+}
+
+// programaAnalise procura o programa deixado por um modulo na pasta da execucao. O
+// caminho vem do manifesto e do numero da execucao, e nunca do pedido.
+func (s *Servidor) programaAnalise(c *caso.Caso) (string, bool) {
+	execucoes, err := c.Execucoes()
+	if err != nil {
+		return "", false
+	}
+	for i := len(execucoes) - 1; i >= 0; i-- {
+		x := execucoes[i]
+		if x.Estado != "concluida" {
+			continue
+		}
+		for _, m := range s.Motor.Modulos {
+			if m.Nome == x.Modulo && m.Abrir != "" {
+				caminho := filepath.Join(c.Dir, "execucoes", strconv.FormatInt(x.ID, 10), "saida", filepath.FromSlash(m.Abrir))
+				if _, err := os.Stat(caminho); err == nil {
+					return caminho, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+func (s *Servidor) abrirAnalise(w http.ResponseWriter, _ *http.Request, c *caso.Caso) {
+	caminho, ok := s.programaAnalise(c)
+	if !ok {
+		falhar(w, http.StatusNotFound, "O exame profundo ainda não foi feito neste caso.")
+		return
+	}
+	cmd := exec.Command(caminho)
+	cmd.Dir = filepath.Dir(caminho)
+	if err := cmd.Start(); err != nil {
+		falhar(w, http.StatusInternalServerError, "Não foi possível abrir: "+err.Error())
+		return
+	}
+	go cmd.Wait()
+	if _, err := c.Custodia.Registrar("analise.aberta", map[string]any{"programa": filepath.Base(caminho)}); err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	responder(w, map[string]bool{"ok": true})
 }
 
 func dirWSL(dirFerramentas string) string {

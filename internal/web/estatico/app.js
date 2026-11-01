@@ -144,12 +144,15 @@ async function telaCaso(id) {
   const numeros = el("div", { class: "numeros" });
   const estado = el("div");
   const abas = el("nav", { class: "abas" });
-  let abaAtual = "atencao";
+  let abaAtual = "visao";
 
   const definicoes = [
+    ["visao", "Visão geral", () => abaVisao(area, base, { abrirAba, abrirEntidade, buscar, abrirPeriodo })],
     ["atencao", "O que merece atenção", () => abaRegistros(area, base, { tipo: "alerta", ordem: "gravidade" }, "Nenhum achado automático até agora. Isso não significa que não há nada: explore a linha do tempo.", true)],
     ["timeline", "Linha do tempo", () => abaRegistros(area, base, {}, "A linha do tempo aparece depois que uma evidência é lida.")],
+    ["conexoes", "Conexões", () => abaConexoes(area, base, abrirEntidade)],
     ["entidades", "Pessoas e objetos", () => abaEntidades(area, base, abrirEntidade)],
+    ["marcados", "Marcados", () => abaRegistros(area, base, { marcados: "1" }, "Nada marcado ainda. Abra um registro e use “Marcar achado”: ele entra no relatório, com a sua nota.")],
     ["evidencias", "Evidências", () => abaEvidencias(area, base)],
   ];
 
@@ -158,6 +161,12 @@ async function telaCaso(id) {
     abas.replaceChildren(...definicoes.map(([k, nome]) =>
       el("button", { class: k === chave ? "ativa" : "", onclick: () => abrirAba(k) }, nome)));
     definicoes.find(([k]) => k === chave)[2]();
+  }
+  function abrirPeriodo(periodo) {
+    abaAtual = "timeline";
+    abas.replaceChildren(...definicoes.map(([k, nome]) =>
+      el("button", { class: k === "timeline" ? "ativa" : "", onclick: () => abrirAba(k) }, nome)));
+    abaRegistros(area, base, {}, "Nada encontrado nesse período.", false, null, periodo);
   }
   function abrirEntidade(e) {
     abas.replaceChildren(...definicoes.map(([k, nome]) => el("button", { onclick: () => abrirAba(k) }, nome)));
@@ -183,7 +192,7 @@ async function telaCaso(id) {
     },
   },
     el("strong", {}, "Arraste a evidência para cá"),
-    el("div", { class: "suave pequeno" }, "Arquivo, pasta ou pacote de coleta. O conteúdo é identificado e lido automaticamente."),
+    el("div", { class: "suave pequeno detalhe-soltar" }, "Arquivo, pasta ou pacote de coleta. O conteúdo é identificado e lido automaticamente."),
     el("div", { class: "acoes" },
       el("button", { onclick: () => entradaArquivos.click() }, "Escolher arquivos"),
       el("button", { onclick: () => entradaPasta.click() }, "Escolher pasta")),
@@ -211,6 +220,8 @@ async function telaCaso(id) {
     const { caso, resumo } = await api(`${base}/resumo`);
     titulo.textContent = caso.nome;
     subtitulo.textContent = [caso.numero, caso.perito].filter(Boolean).join(" · ");
+    // Com evidencia no caso, o campo de arrastar so precisa continuar disponivel.
+    soltar.classList.toggle("compacto", resumo.evidencias > 0);
     const a = resumo.alertas || {};
     numeros.replaceChildren(
       numero(a.critica || 0, "Críticos"), numero(a.alta || 0, "Altos"),
@@ -218,6 +229,7 @@ async function telaCaso(id) {
       numero(resumo.evidencias, "Evidências"));
   }
 
+  window.acompanharCaso = () => { tinhaRodando = true; acompanhar(); };
   let vivo = true;
   pararEstado = () => { vivo = false; pararEstado = null; };
   let tinhaRodando = false;
@@ -263,7 +275,7 @@ async function telaCaso(id) {
 
   try {
     await atualizarNumeros();
-    abrirAba("atencao");
+    abrirAba("visao");
     acompanhar();
   } catch (x) {
     area.replaceChildren(el("div", { class: "aviso erro" }, x.message));
@@ -319,29 +331,54 @@ async function arquivosSoltos(dt) {
 
 // Abas ---------------------------------------------------------------------
 
-async function abaRegistros(area, base, filtro, textoVazio, comGravidade, titulo) {
+async function abaRegistros(area, base, filtroBase, textoVazio, comGravidade, titulo, periodoInicial) {
+  // O filtro escolhido na tela soma ao filtro fixo da aba.
+  const escolha = { de: periodoInicial || "", ate: periodoInicial || "", fonte: "", severidade: "" };
+  const grafico = el("div");
+  const filtros = el("div");
   const corpo = el("tbody");
   const mais = el("div", { class: "mais" });
+  const vazio = el("div", { class: "painel vazio oculto" }, textoVazio);
   const tabela = el("div", { class: "tabela painel" },
     el("table", {},
       el("thead", {}, el("tr", {},
         comGravidade && el("th", {}, "Gravidade"),
         el("th", {}, "Quando (UTC)"), el("th", {}, "O que aconteceu"), el("th", {}, "Fonte"))),
       corpo), mais);
-  area.replaceChildren(titulo ? el("h2", {}, titulo) : "", tabela);
+  area.replaceChildren(titulo ? el("h2", {}, titulo) : "", grafico, filtros, vazio, tabela);
   const limite = 200;
   let deslocar = 0;
+  let geracao = 0;
+  const filtroAtual = () => {
+    const f = { ...filtroBase };
+    for (const [k, v] of Object.entries(escolha)) if (v) f[k] = v;
+    return f;
+  };
+  function aplicar() {
+    deslocar = 0;
+    geracao++;
+    corpo.replaceChildren();
+    mais.replaceChildren();
+    desenharGrafico(grafico, base, filtroAtual(), (periodo) => {
+      if (periodo) { escolha.de = periodo; escolha.ate = periodo; } else { escolha.de = ""; escolha.ate = ""; }
+      aplicar();
+    });
+    desenharFiltros(filtros, base, filtroAtual(), escolha, !filtroBase.severidade, aplicar);
+    carregar();
+  }
   async function carregar() {
-    const q = new URLSearchParams({ ...filtro, limite, deslocar });
+    const minha = geracao;
+    const q = new URLSearchParams({ ...filtroAtual(), limite, deslocar });
     let linhas;
     try { linhas = await api(`${base}/registros?${q}`); } catch (x) {
       area.replaceChildren(el("div", { class: "aviso erro" }, x.message));
       return;
     }
-    if (!linhas.length && deslocar === 0) {
-      area.replaceChildren(titulo ? el("h2", {}, titulo) : "", el("div", { class: "painel vazio" }, textoVazio));
-      return;
-    }
+    if (minha !== geracao) return;
+    const semNada = !linhas.length && deslocar === 0;
+    vazio.classList.toggle("oculto", !semNada);
+    tabela.classList.toggle("oculto", semNada);
+    if (semNada) return;
     for (const l of linhas) {
       corpo.append(el("tr", { class: "clicavel", tabindex: "0", onclick: () => abrirDetalhe(base, l.id), onkeydown: (e) => { if (e.key === "Enter") abrirDetalhe(base, l.id); } },
         comGravidade && el("td", {}, selo(l.severidade)),
@@ -352,7 +389,7 @@ async function abaRegistros(area, base, filtro, textoVazio, comGravidade, titulo
     deslocar += linhas.length;
     mais.replaceChildren(linhas.length === limite ? el("button", { onclick: carregar }, "Mostrar mais") : "");
   }
-  carregar();
+  aplicar();
 }
 
 async function abrirDetalhe(base, id) {
@@ -377,6 +414,7 @@ async function abrirDetalhe(base, id) {
       el("div", { class: "etiquetas" }, l.entidades.map((e) =>
         el("button", { onclick: () => { fechar(); window.abrirEntidadeCaso(e); } },
           `${nomesEntidade[e.tipo] || e.tipo}: ${e.valor} (${e.registros})`)))),
+    painelMarcacao(base, l),
     el("h2", { class: "pequeno" }, "Dados originais"),
     el("pre", {}, dados));
   gaveta.querySelector(".titulo-detalhe").textContent = l.descricao;
@@ -418,7 +456,16 @@ async function abaEvidencias(area, base) {
         el("td", { class: "desc" }, e.nome, el("div", { class: "suave pequeno" }, e.origem)),
         el("td", { class: "data" }, tamanho(e.tamanho)),
         el("td", {}, el("code", {}, e.sha256))))))),
-    d.execucoes.length ? el("h2", { style: null }, " ") : "",
+    d.execucoes.length ? el("div", { class: "grafico-topo titulo-leituras" },
+      el("h2", {}, "Leituras"),
+      d.execucoes.some((x) => x.estado === "falhou") && el("button", {
+        onclick: async (e) => {
+          e.target.disabled = true;
+          e.target.textContent = "Tentando de novo. Acompanhe no topo.";
+          await api(`${base}/processar?refazer=1`, { method: "POST" });
+          window.acompanharCaso?.();
+        },
+      }, "Tentar de novo o que falhou")) : "",
     d.execucoes.length ? el("div", { class: "tabela painel" }, el("table", {},
       el("thead", {}, el("tr", {}, el("th", {}, "Leitura"), el("th", {}, "Situação"), el("th", {}, "Registros"))),
       el("tbody", {}, d.execucoes.map((x) => el("tr", {},
@@ -426,7 +473,8 @@ async function abaEvidencias(area, base) {
         el("td", {}, x.estado === "concluida" && x.erro ? el("span", { class: "selo falhou" }, "Parcial: confira esta leitura")
           : x.estado === "concluida" && x.registros === 0 ? el("span", { class: "selo falhou" }, "Sem resultado: confira esta leitura")
           : x.estado === "concluida" ? el("span", { class: "selo ok" }, "Concluída")
-          : x.estado === "falhou" ? el("span", { class: "selo falhou" }, "Não concluída") : "Em andamento"),
+          : x.estado === "falhou" ? el("span", { class: "selo falhou" }, "Não concluída") : "Em andamento",
+          x.erro && el("div", { class: "suave pequeno desc" }, x.erro)),
         el("td", {}, x.registros)))))) : "");
 }
 

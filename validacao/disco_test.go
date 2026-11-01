@@ -23,6 +23,7 @@ func motorComDisco(t *testing.T) (string, func(...string) *caso.Caso) {
 		t.Fatalf("%v: %s", err, s)
 	}
 	m.Nucleo = exe
+	m.Profundo = os.Getenv("PANTHERA_PROFUNDO") != ""
 	return dados, func(caminhos ...string) *caso.Caso { return processar(t, m, caminhos...) }
 }
 
@@ -102,6 +103,47 @@ func TestDFR01DiretoDaImagem(t *testing.T) {
 	}
 	if !ativos["/Arcturus.txt"] || !ativos["/Castor.txt"] {
 		t.Errorf("arquivos ativos do gabarito ausentes: %v", ativos)
+	}
+}
+
+// DFR-01 pelo exame profundo: o IPED precisa concordar com o gabarito de forma
+// independente da leitura de disco, com datas em UTC.
+func TestDFR01NoExameProfundo(t *testing.T) {
+	if os.Getenv("PANTHERA_PROFUNDO") == "" {
+		t.Skip("so no exame profundo")
+	}
+	dados, rodar := motorComDisco(t)
+	c := rodar(filepath.Join(dados, "nist-dfr", "dfr-01-ntfs.dd"))
+	linhas, err := c.DB.Query(`SELECT r.dados,COALESCE(r.quando,'') FROM registros r JOIN execucoes e ON e.id=r.execucao_id WHERE e.modulo='iped' AND r.fonte!='Exame profundo: apagados'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer linhas.Close()
+	achados := map[string]map[string]string{}
+	datas := map[string]string{}
+	for linhas.Next() {
+		var bruto, quando string
+		if err := linhas.Scan(&bruto, &quando); err != nil {
+			t.Fatal(err)
+		}
+		var d map[string]string
+		if err := json.Unmarshal([]byte(bruto), &d); err != nil {
+			t.Fatal(err)
+		}
+		achados[d["Name"]] = d
+		datas[d["Name"]] = quando
+	}
+	b := achados["Bunda.txt"]
+	if b == nil || b["Deleted"] != "true" || b["Size"] != "4296" {
+		t.Fatalf("Bunda.txt difere do gabarito: %+v", b)
+	}
+	if !strings.HasPrefix(datas["Bunda.txt"], "2000-02-29T18:14:00") {
+		t.Errorf("data errada: %s", datas["Bunda.txt"])
+	}
+	for _, nome := range []string{"Arcturus.txt", "Castor.txt"} {
+		if achados[nome] == nil || achados[nome]["Deleted"] != "false" {
+			t.Errorf("%s deveria estar ativo: %+v", nome, achados[nome])
+		}
 	}
 }
 
@@ -255,6 +297,9 @@ func TestHackingCase(t *testing.T) {
 		}
 	})
 	t.Run("Plaso traz linha do tempo com datas", func(t *testing.T) {
+		if os.Getenv("PANTHERA_PROFUNDO") == "" {
+			t.Skip("so no exame profundo")
+		}
 		var total, comData int
 		err := c.DB.QueryRow(`SELECT COUNT(*),COUNT(r.quando) FROM registros r JOIN execucoes e ON e.id=r.execucao_id WHERE e.modulo='plaso'`).Scan(&total, &comData)
 		if err != nil {

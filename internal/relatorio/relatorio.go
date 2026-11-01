@@ -36,7 +36,17 @@ type dados struct {
 	CustodiaErro   string
 	HashFinal      string
 	NaoPreservados []custodia.Entrada
+	Marcados       []caso.Marcacao
+	Barras         []barra
+	Escala         string
+	SemData        int64
 	Simbolo        template.URL
+}
+
+type barra struct {
+	Periodo string
+	Total   int64
+	Altura  int
 }
 
 // Gerar escreve o relatorio e registra na custodia o hash do documento gerado.
@@ -85,6 +95,26 @@ func Gerar(c *caso.Caso, w io.Writer) error {
 			d.NaoPreservados = append(d.NaoPreservados, e)
 		}
 	}
+	if d.Marcados, err = c.Marcacoes(); err != nil {
+		return err
+	}
+	atividade, err := c.Atividade(caso.Filtro{})
+	if err != nil {
+		return err
+	}
+	d.Escala, d.SemData = atividade.Escala, atividade.SemData
+	var maximo int64 = 1
+	for _, b := range atividade.Baldes {
+		maximo = max(maximo, b.Total)
+	}
+	for _, b := range atividade.Baldes {
+		// Uma barra com dados nunca some, por menor que seja.
+		altura := 0
+		if b.Total > 0 {
+			altura = max(2, int(b.Total*100/maximo))
+		}
+		d.Barras = append(d.Barras, barra{Periodo: strings.Replace(b.Periodo, "T", " ", 1), Total: b.Total, Altura: altura})
+	}
 	var html strings.Builder
 	if err := modelo.Execute(&html, d); err != nil {
 		return err
@@ -120,7 +150,8 @@ var modelo = template.Must(template.New("relatorio").Funcs(template.FuncMap{
 		}
 		return s
 	},
-	"unir": func(a []string) string { return strings.Join(a, " ") },
+	"ultima": func(b []barra) int { return len(b) - 1 },
+	"unir":   func(a []string) string { return strings.Join(a, " ") },
 	"curto": func(s string) string {
 		if len(s) >= 19 {
 			return strings.Replace(s[:19], "T", " ", 1)
@@ -141,7 +172,8 @@ table{border-collapse:collapse;width:100%;font-size:12px;margin-top:8px}th,td{te
 th{font-weight:600}code{font:11px ui-monospace,Consolas,monospace;word-break:break-all}
 .meta{color:#9a9a9a}.ok{color:#ff5cc0;font-weight:600}.ruim{color:#ff6b6b;font-weight:600}
 /* No papel, fundo preto gasta tinta e prejudica a leitura de um anexo. */
-@media print{body{padding:0;color:#111;background:#fff}h2{color:#b0126f;break-after:avoid}th,td{border-color:#ddd}.meta{color:#555}.ok{color:#b0126f}.ruim{color:#a01616}tr{break-inside:avoid}}
+.barras{display:flex;align-items:flex-end;gap:2px;height:120px;border-bottom:1px solid #2a2a2a;margin-top:8px}.coluna{flex:1;height:100%;display:flex;align-items:flex-end}.barra{width:100%;background:#ff1fa8;border-radius:3px 3px 0 0}.eixo{display:flex;justify-content:space-between;font-size:11px;color:#9a9a9a;margin-top:4px}
+@media print{body{padding:0;color:#111;background:#fff}h2{color:#b0126f;break-after:avoid}th,td{border-color:#ddd}.barras{border-color:#999}.barra{background:#b0126f;print-color-adjust:exact;-webkit-print-color-adjust:exact}.eixo{color:#555}.meta{color:#555}.ok{color:#b0126f}.ruim{color:#a01616}tr{break-inside:avoid}}
 </style>
 </head>
 <body>
@@ -156,6 +188,16 @@ th{font-weight:600}code{font:11px ui-monospace,Consolas,monospace;word-break:bre
 <p>Os achados abaixo foram gerados automaticamente e são pontos de partida para o exame. Cada um precisa ser conferido na evidência de origem antes de sustentar qualquer conclusão.</p>
 {{if .Resumo.ExecucoesErro}}<p class="ruim">{{.Resumo.ExecucoesErro}} etapa(s) de processamento falharam. Veja a metodologia.</p>{{end}}
 {{if .NaoExecutados}}<p class="ruim">{{len .NaoExecutados}} leitura(s) aplicáveis não foram executadas. Veja a metodologia.</p>{{end}}
+
+{{if .Barras}}<h2>Atividade no tempo</h2>
+<p class="meta">Registros por {{.Escala}}, em UTC.{{if .SemData}} {{.SemData}} registro(s) sem data ficam fora do gráfico.{{end}}</p>
+<div class="barras">{{range .Barras}}<div class="coluna" title="{{.Periodo}}: {{.Total}}"><div class="barra" style="height:{{.Altura}}%"></div></div>{{end}}</div>
+<div class="eixo"><span>{{(index .Barras 0).Periodo}}</span><span>{{(index .Barras (ultima .Barras)).Periodo}}</span></div>{{end}}
+
+{{if .Marcados}}<h2>Achados marcados pelo responsável</h2>
+<table><tr><th>Quando (UTC)</th><th>Achado</th><th>Nota</th><th>Origem</th></tr>
+{{range .Marcados}}<tr><td>{{if .Quando}}{{curto .Quando}}{{else}}{{.QuandoBruto}}{{end}}</td><td>{{.Descricao}}</td><td>{{.Nota}}</td><td><code>{{.OrigemArquivo}}{{if .OrigemLocal}} #{{.OrigemLocal}}{{end}}</code></td></tr>
+{{end}}</table>{{end}}
 
 <h2>Achados</h2>
 {{if .Achados}}<table><tr><th>Gravidade</th><th>Quando (UTC)</th><th>Achado</th><th>Fonte</th><th>Origem</th></tr>
