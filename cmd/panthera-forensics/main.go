@@ -89,6 +89,28 @@ func executar(args []string) error {
 		return abrir(dirCasos, m, *porta, !*semNavegador)
 	case "preparar":
 		return web.InstalarTodos(ctx, m.Modulos, m.DirFerramentas)
+	case "refazer":
+		if len(args) != 2 {
+			return fmt.Errorf("uso: refazer <pasta do caso>")
+		}
+		c, err := caso.Abrir(args[1])
+		if err != nil {
+			return err
+		}
+		defer c.Fechar()
+		res, err := m.Variante(true, false).Processar(ctx, c, func(etapa string, feitas, total int) {
+			if etapa != "" {
+				fmt.Printf("[%d/%d] %s\n", feitas+1, total, etapa)
+			}
+		})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("executadas=%d reutilizadas=%d falhas=%d ausentes=%d sem_leitura=%d\n", res.Executadas, res.Reutilizadas, len(res.Falhas), len(res.Ausentes), res.SemModulo)
+		for _, falha := range res.Falhas {
+			fmt.Println("falha:", falha)
+		}
+		return nil
 	case "aprofundar":
 		if len(args) != 2 {
 			return fmt.Errorf("uso: aprofundar <pasta do caso>")

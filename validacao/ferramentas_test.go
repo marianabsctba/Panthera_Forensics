@@ -4,6 +4,7 @@ package validacao
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -81,6 +82,40 @@ func TestNomeHostilNaoExecutaComando(t *testing.T) {
 	}
 	if len(achados) != 0 {
 		t.Fatalf("comando executado a partir do nome: %v", achados)
+	}
+}
+
+// Caso real do Data Leakage do NIST: uma imagem ilegivel derrubava o resultado das outras.
+func TestImagemIlegivelNaoDerrubaAsOutras(t *testing.T) {
+	m, dados := ambiente(t)
+	exe := filepath.Join(t.TempDir(), "panthera-forensics.exe")
+	if s, err := exec.Command("go", "build", "-o", exe, "../cmd/panthera-forensics").CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, s)
+	}
+	m.Nucleo = exe
+	lixo := filepath.Join(t.TempDir(), "ilegivel.dd")
+	bloco := make([]byte, 4*1024*1024)
+	for i := range bloco {
+		bloco[i] = byte(i*31 + i/7)
+	}
+	if err := os.WriteFile(lixo, bloco, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := processar(t, m, filepath.Join(dados, "nist-dfr", "dfr-01-ntfs.dd"), lixo)
+	if n := contarPorModulo(t, c, "disco", `r.descricao LIKE '%Bunda.txt%'`); n == 0 {
+		t.Error("a imagem boa deveria ter sido lida")
+	}
+	if n := contarPorModulo(t, c, "disco", `r.tipo='alerta' AND r.descricao LIKE 'Imagem não lida%ilegivel.dd%'`); n != 1 {
+		t.Errorf("a imagem ilegivel deveria gerar um alerta: %d", n)
+	}
+	execucoes, err := c.Execucoes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range execucoes {
+		if x.Modulo == "disco" && !strings.HasPrefix(x.Erro, "leitura parcial") {
+			t.Errorf("deveria constar como parcial: %+v", x.Estado)
+		}
 	}
 }
 

@@ -323,6 +323,12 @@ func (m *Motor) Processar(ctx context.Context, c *caso.Caso, avisar Progresso) (
 		}
 	}
 	if avisar != nil {
+		avisar("Listando arquivos sem leitura própria", feitas, feitas+1)
+	}
+	if _, err := m.listarPreservados(ctx, c); err != nil {
+		return res, err
+	}
+	if avisar != nil {
 		avisar("", feitas, feitas)
 	}
 	return res, nil

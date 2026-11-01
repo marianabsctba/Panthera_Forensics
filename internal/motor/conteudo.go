@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -121,9 +122,24 @@ func (m *Motor) LerArquivo(ctx context.Context, c *caso.Caso, registro, limite i
 		Particao *int64 `json:"particao"`
 		Tamanho  int64  `json:"tamanho"`
 		Residual bool   `json:"residual"`
+		SHA256   string `json:"sha256"`
 	}
 	if err := json.Unmarshal(l.Dados, &d); err != nil {
 		return nil, 0, err
+	}
+	// Arquivo que veio solto ou dentro de um pacote ja esta no cofre, pelo proprio hash.
+	if d.SHA256 != "" && d.Inode == "" {
+		f, err := os.Open(c.CaminhoEvidencia(d.SHA256))
+		if err != nil {
+			return nil, 0, err
+		}
+		defer f.Close()
+		var leitor io.Reader = f
+		if limite > 0 {
+			leitor = io.LimitReader(f, limite)
+		}
+		conteudo, err := io.ReadAll(leitor)
+		return conteudo, d.Tamanho, err
 	}
 	if d.Inode == "" || d.Particao == nil || d.Residual {
 		return nil, 0, errors.New("este registro nao aponta para um arquivo da imagem")

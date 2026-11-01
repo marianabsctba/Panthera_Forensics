@@ -92,7 +92,8 @@ func TestFluxoCompleto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resumo.Registros != 2 || resumo.Alertas["critica"] != 1 || resumo.Alertas["alta"] != 1 {
+	// Os dois alertas e o arquivo sem leitura propria, que tambem precisa aparecer.
+	if resumo.Registros != 3 || resumo.Alertas["critica"] != 1 || resumo.Alertas["alta"] != 1 {
 		t.Fatalf("resumo inesperado: %+v", resumo)
 	}
 
@@ -274,6 +275,78 @@ func TestDadosMantemTextoOriginal(t *testing.T) {
 	}
 	if !strings.Contains(d, "/a&b<c>.txt") {
 		t.Fatalf("texto escapado: %s", d)
+	}
+}
+
+func TestArquivoSemLeituraFicaVisivelENaBusca(t *testing.T) {
+	m, c := montar(t)
+	adicionar(t, c, "anotacao.dat", "senha do cofre e 1234")
+	adicionar(t, c, "binario.dat", "\x00\x01\x02\x03\x04\x05\x06\x07")
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := c.Resumir(); r.Registros != 2 {
+		t.Fatalf("todo arquivo precisa aparecer: %+v", r)
+	}
+	achou, err := c.Consultar(caso.Filtro{Texto: "cofre"})
+	if err != nil || len(achou) != 1 {
+		t.Fatalf("texto fora da busca: %+v %v", achou, err)
+	}
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	if r, _ := c.Resumir(); r.Registros != 2 {
+		t.Fatalf("listou de novo o que ja estava listado: %d", r.Registros)
+	}
+	verificarCustodia(t, c, "arquivos.listados")
+	conteudo, total, err := m.LerArquivo(context.Background(), c, achou[0].ID, 0)
+	if err != nil || total != 21 || string(conteudo) != "senha do cofre e 1234" {
+		t.Fatalf("conteudo do cofre: %q %d %v", conteudo, total, err)
+	}
+}
+
+func zipCom(t *testing.T, itens map[string][]byte) []byte {
+	t.Helper()
+	var b bytes.Buffer
+	z := zip.NewWriter(&b)
+	for nome, dados := range itens {
+		w, err := z.Create(nome)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w.Write(dados)
+	}
+	z.Close()
+	return b.Bytes()
+}
+
+func TestZipDentroDeZip(t *testing.T) {
+	m, c := montar(t)
+	dentro := zipCom(t, map[string][]byte{"pasta/nota.txt": []byte("achado dentro do segundo pacote")})
+	fora := zipCom(t, map[string][]byte{"dentro.zip": dentro})
+	if _, err := c.Adicionar(bytes.NewReader(fora), "fora.zip", "fora.zip"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	achou, err := c.Consultar(caso.Filtro{Texto: "segundo pacote"})
+	if err != nil || len(achou) != 1 {
+		t.Fatalf("zip aninhado nao lido: %+v %v", achou, err)
+	}
+	if !strings.Contains(achou[0].Descricao, "fora.zip!dentro.zip!pasta/nota.txt") {
+		t.Fatalf("caminho perdido: %s", achou[0].Descricao)
+	}
+}
+
+func TestZipCorrompidoPreservaEAvisa(t *testing.T) {
+	_, c := montar(t)
+	novas, err := c.Adicionar(strings.NewReader("PK\x03\x04 nao e um zip de verdade"), "ruim.zip", "ruim.zip")
+	if err == nil || !strings.Contains(err.Error(), "corrompido") {
+		t.Fatalf("erro sem explicacao: %v", err)
+	}
+	if len(novas) != 1 {
+		t.Fatalf("o arquivo enviado precisa ficar preservado: %+v", novas)
 	}
 }
 

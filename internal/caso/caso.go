@@ -226,7 +226,7 @@ func (c *Caso) Adicionar(r io.Reader, nome, origem string) ([]Evidencia, error) 
 	}
 	todas := []Evidencia{e}
 	if strings.EqualFold(filepath.Ext(nome), ".zip") {
-		filhas, err := c.abrirPacote(e)
+		filhas, err := c.abrirPacote(e, 0)
 		if err != nil {
 			return todas, fmt.Errorf("pacote %s: %w", nome, err)
 		}
@@ -294,31 +294,61 @@ func (c *Caso) guardar(r io.Reader, nome, origem string, pai *int64) (Evidencia,
 	return e, err
 }
 
-func (c *Caso) abrirPacote(pacote Evidencia) ([]Evidencia, error) {
+// Limites contra um pacote feito para encher o disco ou prender a analise em um laco.
+const (
+	maximoProfundidadePacote = 5
+	maximoExpansaoPacote     = 500 * 1024 * 1024 * 1024
+)
+
+func (c *Caso) abrirPacote(pacote Evidencia, profundidade int) ([]Evidencia, error) {
 	z, err := zip.OpenReader(c.CaminhoEvidencia(pacote.SHA256))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("não foi possível abrir o pacote, que pode estar corrompido: %w", err)
 	}
 	defer z.Close()
+	var declarado uint64
+	for _, f := range z.File {
+		declarado += f.UncompressedSize64
+	}
+	if declarado > maximoExpansaoPacote {
+		return nil, fmt.Errorf("o pacote se expandiria para %d GB: extraia em um disco dedicado e envie as partes", declarado/(1<<30))
+	}
 	var filhas []Evidencia
+	var falhas []error
 	for _, f := range z.File {
 		if f.FileInfo().IsDir() {
 			continue
 		}
+		// Um item com senha ou danificado nao impede os outros de serem preservados.
 		r, err := f.Open()
 		if err != nil {
-			return filhas, err
+			falhas = append(falhas, fmt.Errorf("%s: %w", f.Name, err))
+			continue
 		}
 		// O nome vem de dentro do pacote e nao e confiavel: so serve para exibir,
 		// porque o arquivo e gravado pelo proprio hash.
 		interno := strings.ReplaceAll(f.Name, `\`, "/")
 		id := pacote.ID
-		e, err := c.guardar(r, path.Base(interno), pacote.Nome+"!"+interno, &id)
+		e, err := c.guardar(r, path.Base(interno), pacote.Origem+"!"+interno, &id)
 		r.Close()
 		if err != nil {
-			return filhas, err
+			falhas = append(falhas, fmt.Errorf("%s: %w", f.Name, err))
+			continue
 		}
 		filhas = append(filhas, e)
+		if strings.EqualFold(path.Ext(interno), ".zip") && profundidade+1 < maximoProfundidadePacote {
+			netas, err := c.abrirPacote(e, profundidade+1)
+			if err != nil {
+				falhas = append(falhas, fmt.Errorf("%s: %w", f.Name, err))
+			}
+			filhas = append(filhas, netas...)
+		}
+	}
+	if len(falhas) > 0 {
+		if _, err := c.Custodia.Registrar("pacote.parcial", map[string]any{"pacote": pacote.ID, "falhas": len(falhas), "primeira": falhas[0].Error()}); err != nil {
+			return filhas, err
+		}
+		return filhas, fmt.Errorf("%d itens não abriram, por exemplo: %w", len(falhas), falhas[0])
 	}
 	return filhas, nil
 }

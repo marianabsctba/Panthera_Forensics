@@ -163,6 +163,7 @@ func TextoLegivel(b []byte) (string, bool) {
 // registro segue o formato "contrato" dos modulos.
 type registro struct {
 	Tipo        string         `json:"tipo"`
+	Severidade  string         `json:"severidade,omitempty"`
 	Quando      string         `json:"quando,omitempty"`
 	Fonte       string         `json:"fonte"`
 	Descricao   string         `json:"descricao"`
@@ -256,8 +257,19 @@ func Executar(dirBin, dirEntrada, dirSaida string) error {
 	t.registros.SetEscapeHTML(false)
 	var erros []error
 	for _, segmentos := range grupos {
+		// Uma imagem ilegivel nao pode custar o resultado das outras: ela vira um alerta e a
+		// execucao termina como parcial, com tudo o que foi possivel ler.
 		if err := t.imagem(segmentos); err != nil {
-			erros = append(erros, fmt.Errorf("%s: %w", filepath.Base(segmentos[0]), err))
+			nome := filepath.Base(segmentos[0])
+			erros = append(erros, fmt.Errorf("%s: %w", nome, err))
+			if e := t.registros.Encode(registro{
+				Tipo: "alerta", Severidade: "media", Fonte: "Imagem de disco",
+				Descricao:   fmt.Sprintf("Imagem não lida, examine por outro meio: %s (%v)", nome, err),
+				OrigemLocal: nome,
+				Dados:       map[string]any{"imagem": nome, "erro": err.Error()},
+			}); e != nil {
+				return e
+			}
 		}
 	}
 	if err := saidaRegistros.Flush(); err != nil {
@@ -306,6 +318,7 @@ func Agrupar(dir string) ([][]string, error) {
 
 type trabalho struct {
 	bin, saida string
+	motivo     string
 	registros  *json.Encoder
 	derivados  *json.Encoder
 	extraidos  int
@@ -349,7 +362,6 @@ func (t *trabalho) imagem(segmentos []string) error {
 	c.Stdout = &mmls
 	_ = c.Run()
 	lidas := 0
-	var erros []string
 	for _, p := range InterpretarMmls(mmls.String()) {
 		ok, err := t.particao(segmentos, p)
 		if err != nil {
@@ -358,7 +370,6 @@ func (t *trabalho) imagem(segmentos []string) error {
 		if ok {
 			lidas++
 		} else {
-			erros = append(erros, p.Descricao)
 			if err := t.registros.Encode(registro{
 				Tipo: "evento", Fonte: "Sistema de arquivos",
 				Descricao:   fmt.Sprintf("Partição no setor %d não pôde ser lida: %s", p.Inicio, p.Descricao),
@@ -370,7 +381,7 @@ func (t *trabalho) imagem(segmentos []string) error {
 		}
 	}
 	if lidas == 0 {
-		return fmt.Errorf("nenhum sistema de arquivos reconhecido (%s)", strings.Join(erros, "; "))
+		return fmt.Errorf("nenhum sistema de arquivos reconhecido: %s", t.motivo)
 	}
 	return nil
 }
@@ -432,6 +443,8 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 		return false, err
 	}
 	if err := c.Wait(); err != nil && total == 0 {
+		// A mensagem da ferramenta explica o motivo, como uma suspeita de criptografia.
+		t.motivo = strings.Join(strings.Fields(erros.String()), " ")
 		return false, nil
 	}
 	for _, e := range legiveis {

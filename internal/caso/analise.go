@@ -182,6 +182,7 @@ type VisaoGeral struct {
 	Parciais     int64                     `json:"parciais"`
 	SemResultado int64                     `json:"sem_resultado"`
 	Marcados     int64                     `json:"marcados"`
+	SemLeitura   int64                     `json:"sem_leitura"`
 }
 
 // Visao monta o resumo. Tudo aqui e contagem direta dos registros: nenhuma conclusao e
@@ -240,6 +241,7 @@ func (c *Caso) Visao() (VisaoGeral, error) {
 		`SELECT COUNT(*) FROM execucoes WHERE estado='concluida' AND erro!=''`:    &v.Parciais,
 		`SELECT COUNT(*) FROM execucoes WHERE estado='concluida' AND registros=0`: &v.SemResultado,
 		`SELECT COUNT(*) FROM marcacoes`:                                          &v.Marcados,
+		`SELECT COUNT(*) FROM evidencias WHERE tipo=''`:                           &v.SemLeitura,
 	} {
 		if err := c.DB.QueryRow(consulta).Scan(destino); err != nil {
 			return v, err

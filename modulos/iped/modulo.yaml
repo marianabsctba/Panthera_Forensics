@@ -8,7 +8,10 @@ reconhece:
   - tipo: disco
     magica_hex: "455646090d0aff00"
     extensoes: [.dd, .e01, .001, .002, .003, .004, .005, .006, .007, .008, .009, .010, .011, .012]
-consome: [disco]
+  # So pela extensao: docx e outros formatos tambem comecam como um zip.
+  - tipo: pacote
+    extensoes: [.zip]
+consome: [disco, pacote]
 modo: imagem
 instalar:
   windows-amd64:

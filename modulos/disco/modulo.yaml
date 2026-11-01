@@ -16,6 +16,7 @@ instalar:
 comando:
   windows:
     exec: "{nucleo}"
+    parcial_aceita: true
     args: [auxiliar-disco, -bin, "{ferramenta}/sleuthkit-4.15.0-win32/bin", -saida, "{saida}", "{entrada}"]
 saida:
   arquivos: registros.jsonl

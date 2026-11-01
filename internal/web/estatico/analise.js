@@ -200,7 +200,8 @@ function painelMarcacao(base, l) {
 function painelArquivo(base, l, casoId) {
   let d = {};
   try { d = typeof l.dados === "string" ? JSON.parse(l.dados) : (l.dados || {}); } catch { /* sem dados */ }
-  if (!d.inode || d.particao === undefined || d.residual || d.modo?.startsWith("d/")) return null;
+  const noCofre = d.sha256 && !d.inode;
+  if (!noCofre && (!d.inode || d.particao === undefined || d.residual || d.modo?.startsWith("d/"))) return null;
   const alvo = el("div", { class: "arquivo" });
   const botao = el("button", {
     onclick: async () => {
@@ -252,7 +253,9 @@ async function abaVisao(area, base, acoes) {
     return;
   }
   if (!v.resumo.registros) {
-    area.replaceChildren(el("div", { class: "painel vazio" }, "Arraste uma evidência para começar. O resumo do caso aparece aqui."));
+    area.replaceChildren(el("div", { class: "painel vazio" }, v.resumo.evidencias
+      ? "As evidências foram preservadas, mas a leitura ainda não terminou ou não trouxe resultado. Veja a aba Evidências."
+      : "Arraste uma evidência para começar. O resumo do caso aparece aqui."));
     return;
   }
   const dataCurta = (d) => (d ? d.slice(0, 10) : "");
@@ -271,6 +274,9 @@ async function abaVisao(area, base, acoes) {
     ? `${formatoNumero(totalAlertas)} alertas automáticos pedem conferência na evidência de origem.`
     : "Nenhum alerta automático. Isso não indica que o caso está limpo: as detecções cobrem logs .evtx, executáveis e tráfego de rede, e logs .evt de sistemas antigos ainda não são lidos.");
 
+  if (v.sem_leitura) {
+    frases.push(`${formatoNumero(v.sem_leitura)} ${v.sem_leitura === 1 ? "arquivo está em formato" : "arquivos estão em formatos"} sem leitura própria: foram preservados e listados, e o texto legível entra na busca.`);
+  }
   const avisos = [];
   if (v.falhas) avisos.push(`${v.falhas} ${v.falhas === 1 ? "leitura não terminou" : "leituras não terminaram"}.`);
   if (v.parciais) avisos.push(`${v.parciais} ${v.parciais === 1 ? "leitura foi parcial" : "leituras foram parciais"}.`);

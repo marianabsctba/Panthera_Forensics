@@ -216,7 +216,9 @@ async function telaCaso(id) {
     let enviados = 0;
     const falhas = [];
     for (const f of arquivos) {
-      mostrarProgresso(estado, `Preservando ${f.name}`, enviados, total || 1);
+      mostrarProgresso(estado, /\.zip$/i.test(f.name)
+        ? `Preservando e abrindo ${f.name}. Pacotes grandes levam alguns minutos.`
+        : `Preservando ${f.name}`, enviados, total || 1);
       const origem = f.webkitRelativePath || f.caminhoRelativo || f.name;
       try {
         await api(`${base}/evidencias?nome=${encodeURIComponent(f.name)}&origem=${encodeURIComponent(origem)}`, { method: "POST", body: f });
