@@ -33,7 +33,7 @@ saida:
       se: {_arquivo: conn}
       quando: "{ts}"
       fonte: "Rede: conexão"
-      descricao: "{id.orig_h}:{id.orig_p} para {id.resp_h}:{id.resp_p} {service} ({orig_bytes} bytes enviados, {resp_bytes} recebidos)"
+      descricao: "{id.orig_h}:{id.orig_p} para {id.resp_h}:{id.resp_p} {service} ({orig_ip_bytes} bytes enviados, {resp_ip_bytes} recebidos)"
       origem_local: "{uid}"
       entidades:
         - {tipo: ip, valor: "{id.orig_h}"}
