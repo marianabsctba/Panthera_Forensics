@@ -17,7 +17,7 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Módulos de memória (Volatility) | **Não validados**: não listam processos nas imagens do NIST, de 2005 e 2006 |
 | Módulos bulk_extractor, YARA, capa, Chainsaw, tshark, Zeek, Suricata e Plaso | Executados com dados públicos reais, ver [validação](validacao/README.md) |
 | Ambiente Linux dedicado (WSL) para tshark, Zeek, Suricata e Plaso | Instalado e em uso; a criação pelo `preparar` a partir do zero ainda não foi testada |
-| Exame profundo opcional (IPED) | DFR-01 confere com o gabarito; e-mails, histórico do Internet Explorer e busca do Windows conferidos no Data Leakage |
+| Exame profundo opcional (IPED e bulk_extractor) | DFR-01 confere com o gabarito; e-mails, histórico do Internet Explorer e busca do Windows conferidos no Data Leakage. Pacotes de rede recuperados do disco só aparecem depois dele |
 | Linha do tempo completa opcional (Plaso) | Separada do exame profundo por poder levar horas; só tem conferência de datas |
 | Atalhos, listas de atalhos, pastas navegadas, lixeira e diário do NTFS | Conferidos com o gabarito do Data Leakage |
 | Cópias de sombra | Conferidas com o gabarito do Data Leakage, que só tem uma cópia e em Windows 7 |
@@ -26,6 +26,8 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Busca no conteúdo | Arquivos de texto de até 2 MB fora da pasta do Windows na análise padrão; demais formatos no exame profundo, sem janela de outro programa |
 | Recuperação do conteúdo de arquivos apagados | Pela tela do programa; 17 arquivos da RM#2 do Data Leakage com o tamanho do gabarito |
 | Teste às cegas com um caso não usado para calibrar | Data Leakage: 20 de 57 sem ajuda. Depois de corrigir, 52 de 57, já sem valor de teste às cegas ([nota](validacao/data-leakage-nota.md)) |
+| Tarefas agendadas | Conferidas à mão em um único caso, o Windows Server 2022, sem gabarito |
+| Teste às cegas em caso sem gabarito | Windows Server 2022: sem nota de acerto, serviu para achar falhas ([nota](validacao/server2022-nota.md)) |
 | Coletor para a máquina-alvo | Não feito |
 
 ## Antivírus

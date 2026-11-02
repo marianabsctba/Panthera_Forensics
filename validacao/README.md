@@ -15,6 +15,7 @@ PANTHERA_HOME=<pasta com ferramentas> PANTHERA_DADOS=<pasta de dados> go test -t
 | Hacking Case | 31 perguntas, detalhadas abaixo | Passa em 29; Q30 diverge; Q31 não testada |
 | Data Leakage, às cegas | [60 perguntas](data-leakage-nota.md), 57 avaliadas | 20 certas sozinho, 28 com trabalho manual |
 | Data Leakage, depois de corrigir | Mesmas perguntas, sem valor de teste às cegas | 52 conferem; 4 parciais; 1 sem resposta |
+| Windows Server 2022, às cegas | [20 perguntas](server2022-nota.md), publicadas antes de abrir o README do caso | **Sem nota**: o caso não traz gabarito. Serviu para achar falhas |
 | DFR-01 NTFS no exame profundo (IPED) | Arquivo apagado, tamanho, data e arquivos ativos | Passa |
 | Navegadores (amostras do Hindsight) | Chrome com 63 itens, Firefox com 6, sem perda | Passa |
 | Rede (amostra do projeto Suricata) | Regra 2100498 esperada, fuso convertido, conexão registrada | Passa |
