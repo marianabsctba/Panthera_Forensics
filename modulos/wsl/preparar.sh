@@ -9,7 +9,7 @@ add-apt-repository -y ppa:gift/stable >/dev/null
 echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_24.04/ /' > /etc/apt/sources.list.d/zeek.list
 curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_24.04/Release.key | gpg --dearmor > /etc/apt/trusted.gpg.d/zeek.gpg
 apt-get update -qq
-apt-get install -y -qq suricata zeek-lts plaso-tools python3-libvshadow python3-libewf python3-pytsk3 >/dev/null
+apt-get install -y -qq suricata zeek-lts plaso-tools libvshadow-python3 libewf-python3 python3-pytsk3 >/dev/null
 suricata-update --no-test >/dev/null 2>&1
 test -x /opt/zeek/bin/zeek
 test -s /var/lib/suricata/rules/suricata.rules

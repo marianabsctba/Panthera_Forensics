@@ -1,0 +1,3 @@
+# Rodam dentro do Linux: com CRLF, o bash e o python quebram.
+*.sh text eol=lf
+*.py text eol=lf
