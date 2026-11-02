@@ -484,7 +484,7 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 		return false, err
 	}
 	vistas := map[string]bool{}
-	var nomes, legiveis []Entrada
+	var nomes, legiveis, agendadas []Entrada
 	leitor := bufio.NewScanner(tubo)
 	leitor.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	total := 0
@@ -519,6 +519,9 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 				(textos.MatchString(e.Caminho) && !pastaWindows.MatchString(e.Caminho))) {
 			legiveis = append(legiveis, e)
 		}
+		if !e.Apagado && !e.Residual && !e.NomeArquivo && e.Tamanho > 0 && e.Tamanho <= maximoTexto && tarefas.MatchString(e.Caminho) {
+			agendadas = append(agendadas, e)
+		}
 	}
 	if err := leitor.Err(); err != nil {
 		return false, err
@@ -530,6 +533,11 @@ func (t *trabalho) particao(segmentos []string, p Particao) (bool, error) {
 	}
 	for _, e := range legiveis {
 		if err := t.indexarTexto(segmentos, p, e); err != nil {
+			return false, err
+		}
+	}
+	for _, e := range agendadas {
+		if err := t.lerTarefa(segmentos, p, e); err != nil {
 			return false, err
 		}
 	}
