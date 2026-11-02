@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS registros(
   dados TEXT NOT NULL DEFAULT '{}');
 CREATE INDEX IF NOT EXISTS registros_quando ON registros(quando);
 CREATE INDEX IF NOT EXISTS registros_tipo ON registros(tipo, severidade);
+CREATE INDEX IF NOT EXISTS registros_acessos ON registros(fonte) WHERE ` + filtroAcessos + `;
 CREATE TABLE IF NOT EXISTS entidades(
   id INTEGER PRIMARY KEY, tipo TEXT NOT NULL, valor TEXT NOT NULL COLLATE NOCASE, UNIQUE(tipo, valor));
 CREATE TABLE IF NOT EXISTS registro_entidade(

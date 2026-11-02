@@ -159,6 +159,7 @@ async function telaCaso(id) {
     ["visao", "Visão geral", () => abaVisao(area, base, { abrirAba, abrirEntidade, buscar, abrirPeriodo })],
     ["atencao", "O que merece atenção", () => abaRegistros(area, base, { tipo: "alerta", ordem: "gravidade" }, "Nenhum achado automático. Isso não indica que o caso está limpo: as detecções cobrem logs .evtx, executáveis e tráfego de rede, e logs .evt de sistemas antigos ainda não são lidos.", true)],
     ["timeline", "Linha do tempo", () => abaRegistros(area, base, {}, "A linha do tempo aparece depois que uma evidência é lida.")],
+    ["acessos", "Acessos", () => abaAcessos(area, base, buscar)],
     ["conexoes", "Conexões", () => abaConexoes(area, base, abrirEntidade)],
     ["entidades", "Pessoas e objetos", () => abaEntidades(area, base, abrirEntidade)],
     ["marcados", "Marcados", () => abaRegistros(area, base, { marcados: "1" }, "Nada marcado ainda. Abra um registro e use “Marcar achado”: ele entra no relatório, com a sua nota.")],

@@ -341,6 +341,83 @@ async function abaVisao(area, base, acoes) {
   desenharGrafico(grafico, base, {}, (periodo) => acoes.abrirPeriodo(periodo));
 }
 
+// Acessos remotos: contagem direta dos logs. A tela nao chama ninguem de invasor.
+async function abaAcessos(area, base, buscar) {
+  const carregando = el("div", { class: "painel vazio" }, "Somando os acessos nos logs…");
+  area.replaceChildren(carregando);
+  let a;
+  try { a = await api(`${base}/acessos`); } catch (x) {
+    if (carregando.isConnected) area.replaceChildren(el("div", { class: "aviso erro" }, x.message));
+    return;
+  }
+  // A soma pode levar alguns segundos, e a pessoa pode ja ter trocado de aba.
+  if (!carregando.isConnected) return;
+  if (!a.total_origens && !a.marcos.length) {
+    area.replaceChildren(el("div", { class: "painel vazio" }, "Nenhum acesso remoto nos logs do Windows lidos. Isso não indica que não houve acesso: logs apagados, logs .evt de sistemas antigos e logs de Linux não entram nesta conta."));
+    return;
+  }
+  const n = formatoNumero;
+  const nomesRede = { publica: "IP público", interna: "Rede interna", nome: "Só o nome da estação" };
+  const publicas = a.origens.filter((o) => o.rede === "publica").length;
+  const notaOrigem = (o) => {
+    const partes = [];
+    if (o.primeira_entrada) {
+      partes.push(`Entrou em ${o.conta_entrada} em ${textoData(o.primeira_entrada)}${o.falhas_antes ? `, depois de ${n(o.falhas_antes)} ${o.falhas_antes === 1 ? "falha" : "falhas"}` : ""}.`);
+    } else if (o.falhas) {
+      partes.push("Só falhas de senha, nenhuma entrada.");
+    }
+    const tipos = Object.entries(o.tipos).sort((x, y) => y[1] - x[1]).map(([t, q]) => `${t} ${n(q)}`);
+    if (tipos.length) partes.push(`Entradas: ${tipos.join(", ")}.`);
+    if (o.anonimas) partes.push(`${n(o.anonimas)} ${o.anonimas === 1 ? "sessão anônima" : "sessões anônimas"}, sem senha.`);
+    return partes.join(" ");
+  };
+  const textoContas = (o) => {
+    const itens = o.contas.map((c) => {
+      const q = [c.falhas && `${n(c.falhas)} ${c.falhas === 1 ? "falha" : "falhas"}`, c.entradas && `${n(c.entradas)} ${c.entradas === 1 ? "entrada" : "entradas"}`].filter(Boolean);
+      return `${c.conta}${q.length ? ` (${q.join(", ")})` : ""}`;
+    });
+    if (o.contas_total > o.contas.length) itens.push(`e mais ${n(o.contas_total - o.contas.length)}`);
+    return itens.join("; ");
+  };
+  const linhaMarco = (m) => el("tr", {
+    class: "clicavel", tabindex: "0",
+    onclick: () => abrirDetalhe(base, m.registro),
+    onkeydown: (e) => { if (e.key === "Enter") abrirDetalhe(base, m.registro); },
+  },
+    el("td", { class: "data" }, m.quando ? textoData(m.quando) : "Sem data"),
+    el("td", { class: "desc" }, m.descricao));
+
+  area.replaceChildren(
+    el("div", { class: "painel resumo" },
+      el("h2", {}, "Acessos"),
+      el("p", {}, `${n(a.total_origens)} ${a.total_origens === 1 ? "origem remota" : "origens remotas"}, ${n(a.falhas)} falhas de senha e ${n(a.entradas)} entradas nos logs do Windows.`),
+      el("div", { class: "suave pequeno" }, "Contagem direta dos logs. A ordem começa pelas origens ligadas a mudanças na máquina e não diz quem é invasor: confira cada origem na evidência."),
+      a.repetidos > 0 && el("div", { class: "suave pequeno" }, `${n(a.repetidos)} eventos repetidos, vindos de outra cópia do mesmo log, foram contados uma vez só.`),
+      a.total_origens > a.origens.length && el("div", { class: "suave pequeno" }, `Mostrando ${n(a.origens.length)} de ${n(a.total_origens)} origens${publicas ? `, ${n(publicas)} delas com IP público` : ""}.`)),
+    a.marcos.length > 0 && el("div", { class: "painel tabela resumo" },
+      el("h2", {}, "Sequência dos fatos"),
+      a.total_marcos > a.marcos.length && el("div", { class: "suave pequeno" }, `Os ${n(a.marcos.length)} mais recentes de ${n(a.total_marcos)}.`),
+      el("table", {},
+        el("thead", {}, el("tr", {}, el("th", {}, rotuloQuando()), el("th", {}, "O que aconteceu"))),
+        el("tbody", {}, a.marcos.map(linhaMarco)))),
+    a.origens.length > 0 && el("div", { class: "painel tabela" },
+      el("h2", {}, "De onde vieram"),
+      el("table", {},
+        el("thead", {}, el("tr", {},
+          el("th", {}, "Origem"), el("th", {}, "Falhas"), el("th", {}, "Entradas"), el("th", {}, "RDP"),
+          el("th", {}, `Primeira e última (${fusoEscolhido.rotulo})`), el("th", {}, "Contas"))),
+        el("tbody", {}, a.origens.map((o) => el("tr", {},
+          el("td", { class: "desc" },
+            el("button", { class: "link", onclick: () => buscar(o.origem) }, el("strong", {}, o.origem)),
+            el("div", { class: "suave pequeno" }, [nomesRede[o.rede], ...o.estacoes.filter((e) => e !== o.origem)].join(" · ")),
+            el("div", { class: "pequeno" }, notaOrigem(o)),
+            o.acoes.length > 0 && el("div", { class: "pequeno" }, `Nesta sessão: ${o.acoes.join("; ")}.`),
+            o.proximas.length > 0 && el("div", { class: "pequeno" }, `Até 1 hora depois de entrar nessa conta, sem prova de autoria: ${o.proximas.join("; ")}.`)),
+          el("td", {}, n(o.falhas)), el("td", {}, n(o.entradas)), el("td", {}, n(o.rdp)),
+          el("td", { class: "data" }, textoData(o.primeira), el("br", {}), textoData(o.ultima)),
+          el("td", { class: "desc pequeno" }, textoContas(o))))))));
+}
+
 const nomesEntidadePlural = { host: "Máquinas", usuario: "Usuários", ip: "IPs", dominio: "Domínios", email: "E-mails", regra: "Regras disparadas" };
 
 // Mapa de conexoes: os grupos ficam em setores do circulo, entao o tipo de cada ponto se

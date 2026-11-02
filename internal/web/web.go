@@ -109,6 +109,7 @@ func (s *Servidor) Handler(endereco string) http.Handler {
 	mux.HandleFunc("GET /api/casos/{id}/fontes", s.comCaso(s.fontes))
 	mux.HandleFunc("GET /api/casos/{id}/visao", s.comCaso(s.visao))
 	mux.HandleFunc("GET /api/casos/{id}/conexoes", s.comCaso(s.conexoes))
+	mux.HandleFunc("GET /api/casos/{id}/acessos", s.comCaso(s.acessos))
 	mux.HandleFunc("GET /api/casos/{id}/entidades", s.comCaso(s.entidades))
 	mux.HandleFunc("GET /api/casos/{id}/evidencias", s.comCaso(s.evidencias))
 	mux.HandleFunc("POST /api/casos/{id}/evidencias", s.comCaso(s.enviarEvidencia))
@@ -315,6 +316,15 @@ func (s *Servidor) conexoes(w http.ResponseWriter, _ *http.Request, c *caso.Caso
 		return
 	}
 	responder(w, m)
+}
+
+func (s *Servidor) acessos(w http.ResponseWriter, _ *http.Request, c *caso.Caso) {
+	a, err := c.Acessos()
+	if err != nil {
+		falhar(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	responder(w, a)
 }
 
 func (s *Servidor) marcar(w http.ResponseWriter, r *http.Request, c *caso.Caso) {
