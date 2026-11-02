@@ -3,6 +3,8 @@ nome: bulk-extractor
 titulo: Vestígios no conteúdo do disco
 versao: "2.2.0"
 ferramenta: bulk-extractor
+# Le o disco inteiro byte a byte: levou 72 de 152 minutos em um disco de 50 GB.
+opcional: true
 reconhece:
   - tipo: disco
     magica_hex: "455646090d0aff00"
