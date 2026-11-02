@@ -24,7 +24,7 @@ As outras 15 perguntas ficam sem conferência externa.
 | A análise levou 2h32, e `bulk_extractor` sozinho levou 72 minutos, sem deixar nada aparecer enquanto rodava | Movido para o exame profundo |
 | O comando da tarefa maliciosa, a melhor prova do caso, só saiu abrindo o arquivo à mão | As tarefas agendadas agora viram registros com autor, gatilho e comando, e programa em pasta de usuário vira alerta |
 | Conexões de rede saíam como "( bytes enviados, recebidos)" | Corrigido: conexão sem conteúdo não tem o campo que era lido, e o novo campo existe sempre |
-| Nada separa sozinho o administrador do invasor, nem resume o ataque | **Aberto.** Foi o que mais exigiu trabalho manual |
+| Nada separa sozinho o administrador do invasor, nem resume o ataque | Nova aba Acessos, com origens, contas, falhas, entradas e a sequência dos fatos. Ela mostra os fatos, mas não diz quem é o invasor |
 | `dir.exe` e `rename.exe` não dispararam nenhuma assinatura, e um servidor sem Prefetch nem auditoria de processos não prova execução | **Limite conhecido** |
 
 Dois itens que publiquei como falha antes de abrir o README foram revistos:
@@ -46,6 +46,14 @@ A mesma imagem, em um caso novo e do zero, sem falhas em nenhum módulo:
 | Conexões de rede | Sem bytes | 226 conexões, todas com bytes |
 
 Os tempos são de uma única execução em cada lado, sem controle do que mais rodava na máquina. A correção desloca os vestígios do disco para o exame profundo, então o total não caiu: quem roda os dois ainda espera 3h47.
+
+## Aba Acessos
+
+Criada depois do teste, vendo este caso, então ela também não vale como teste às cegas. Mostra de novo, sem script, o que eu tinha montado à mão: as 100.003 falhas de `36.133.110.87`, a primeira entrada às 10:55:56, depois de 52.426 falhas, a conta `admin` e a tarefa com o comando completo.
+
+O caso também mostrou um limite. As mudanças na conta `admin` saíram em uma sessão antiga do sistema (`0x81BFAB`), sem nenhuma entrada no log, então os dados não ligam essas mudanças a um IP. A tela cita a última entrada remota na conta, `185.229.66.183`, e diz que isso não prova a autoria. A ligação direta pela sessão foi testada só com dados de teste.
+
+Só entram os eventos 4624, 4625 e 1149 do Windows, e as sessões 21 e 25 do RDP ainda não são lidas. No Data Leakage, sem acesso remoto, a aba lista só as contas criadas.
 
 ## Conclusão
 

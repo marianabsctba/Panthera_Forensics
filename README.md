@@ -27,6 +27,7 @@ Suíte forense local: abrir o executável, arrastar a evidência e investigar. O
 | Recuperação do conteúdo de arquivos apagados | Pela tela do programa; 17 arquivos da RM#2 do Data Leakage com o tamanho do gabarito |
 | Teste às cegas com um caso não usado para calibrar | Data Leakage: 20 de 57 sem ajuda. Depois de corrigir, 52 de 57, já sem valor de teste às cegas ([nota](validacao/data-leakage-nota.md)) |
 | Tarefas agendadas | Conferidas à mão em um único caso, o Windows Server 2022, sem gabarito |
+| Aba Acessos, com origens remotas, contas, falhas, entradas e sequência dos fatos | Só logs do Windows; conferida à mão no Windows Server 2022, sem gabarito. Não diz quem é o invasor |
 | Teste às cegas em caso sem gabarito | Windows Server 2022: sem nota de acerto, serviu para achar falhas ([nota](validacao/server2022-nota.md)) |
 | Coletor para a máquina-alvo | Não feito |
 
