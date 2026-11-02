@@ -279,6 +279,61 @@ func TestReconhecePrefixoDoNome(t *testing.T) {
 	}
 }
 
+func TestNovaVersaoSubstituiLeituraSemDuplicar(t *testing.T) {
+	m, c := montar(t)
+	adicionar(t, c, "a.bin", "FAKE a")
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	var antes int
+	if err := c.DB.QueryRow(`SELECT COUNT(*) FROM registros`).Scan(&antes); err != nil {
+		t.Fatal(err)
+	}
+	if antes == 0 {
+		t.Fatal("a primeira leitura deveria trazer registros")
+	}
+	var marcado int64
+	if err := c.DB.QueryRow(`SELECT id FROM registros LIMIT 1`).Scan(&marcado); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Marcar(marcado, "achado"); err != nil {
+		t.Fatal(err)
+	}
+	// Nova versao do mesmo modulo, como acontece ao atualizar o programa.
+	m.Modulos[0].Versao += "-nova"
+	if _, err := m.Processar(context.Background(), c, nil); err != nil {
+		t.Fatal(err)
+	}
+	var depois, marcados, busca int
+	if err := c.DB.QueryRow(`SELECT COUNT(*) FROM registros`).Scan(&depois); err != nil {
+		t.Fatal(err)
+	}
+	// Os da nova leitura, mais o marcado, que fica.
+	if depois != antes+1 {
+		t.Fatalf("registros: %d antes, %d depois", antes, depois)
+	}
+	if err := c.DB.QueryRow(`SELECT COUNT(*) FROM marcacoes m JOIN registros r ON r.id=m.registro_id`).Scan(&marcados); err != nil {
+		t.Fatal(err)
+	}
+	if marcados != 1 {
+		t.Fatalf("o achado marcado sumiu: %d", marcados)
+	}
+	if err := c.DB.QueryRow(`SELECT COUNT(*) FROM busca`).Scan(&busca); err != nil {
+		t.Fatal(err)
+	}
+	if busca != depois {
+		t.Fatalf("busca com %d linhas para %d registros", busca, depois)
+	}
+	execucoes, err := c.Execucoes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(execucoes) != 1 || execucoes[0].Versao != m.Modulos[0].Versao {
+		t.Fatalf("leituras visiveis: %+v", execucoes)
+	}
+	verificarCustodia(t, c, "modulo.substituido")
+}
+
 func TestDadosMantemTextoOriginal(t *testing.T) {
 	m, c := montar(t)
 	m.Modulos[0].Saida.Formato = "contrato"

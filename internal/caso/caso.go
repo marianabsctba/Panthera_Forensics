@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS evidencias(
 CREATE TABLE IF NOT EXISTS execucoes(
   id INTEGER PRIMARY KEY, chave TEXT NOT NULL, modulo TEXT NOT NULL, titulo TEXT NOT NULL, versao TEXT NOT NULL,
   ferramenta_sha256 TEXT NOT NULL DEFAULT '', args TEXT NOT NULL DEFAULT '[]', estado TEXT NOT NULL,
-  inicio TEXT NOT NULL, fim TEXT, erro TEXT NOT NULL DEFAULT '', registros INTEGER NOT NULL DEFAULT 0);
+  inicio TEXT NOT NULL, fim TEXT, erro TEXT NOT NULL DEFAULT '', registros INTEGER NOT NULL DEFAULT 0,
+  alvo TEXT NOT NULL DEFAULT '');
 CREATE INDEX IF NOT EXISTS execucoes_chave ON execucoes(chave, estado);
 CREATE TABLE IF NOT EXISTS registros(
   id INTEGER PRIMARY KEY, execucao_id INTEGER NOT NULL REFERENCES execucoes(id), tipo TEXT NOT NULL,
@@ -86,6 +87,25 @@ CREATE TABLE IF NOT EXISTS marcacoes(
   registro_id INTEGER PRIMARY KEY REFERENCES registros(id), nota TEXT NOT NULL DEFAULT '', criado TEXT NOT NULL);
 CREATE VIRTUAL TABLE IF NOT EXISTS busca USING fts5(descricao, fonte, dados);
 `
+
+// migrar acrescenta o que casos antigos ainda nao tem.
+func migrar(db *sql.DB) error {
+	var existe, temAlvo int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name='execucoes'`).Scan(&existe); err != nil {
+		return err
+	}
+	if existe == 0 {
+		return nil
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('execucoes') WHERE name='alvo'`).Scan(&temAlvo); err != nil {
+		return err
+	}
+	if temAlvo > 0 {
+		return nil
+	}
+	_, err := db.Exec(`ALTER TABLE execucoes ADD COLUMN alvo TEXT NOT NULL DEFAULT ''`)
+	return err
+}
 
 // Criar inicia um caso novo dentro de raiz.
 func Criar(raiz, nome, numero, perito string) (*Caso, error) {
@@ -143,6 +163,10 @@ func Abrir(dir string) (*Caso, error) {
 	}
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(filepath.Join(dir, "caso.db"))+"?_pragma=busy_timeout(30000)&_pragma=foreign_keys(1)")
 	if err != nil {
+		return nil, err
+	}
+	if err := migrar(db); err != nil {
+		db.Close()
 		return nil, err
 	}
 	if _, err := db.Exec(esquema); err != nil {

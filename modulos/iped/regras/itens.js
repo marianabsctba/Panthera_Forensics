@@ -49,7 +49,8 @@ function conteudo(doc) {
 
 function semEntidades(texto) {
   return String(texto).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
+    .replace(/&nbsp;/g, " ").replace(/&#(\d+);/g, function (_, n) { return String.fromCharCode(parseInt(n, 10)); })
+    .replace(/&amp;/g, "&");
 }
 
 function textoDoHtml(html) {

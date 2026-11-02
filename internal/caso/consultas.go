@@ -262,7 +262,7 @@ type Execucao struct {
 
 // Execucoes lista o que ja rodou no caso.
 func (c *Caso) Execucoes() ([]Execucao, error) {
-	linhas, err := c.DB.Query(`SELECT id,modulo,titulo,versao,ferramenta_sha256,args,estado,inicio,COALESCE(fim,''),erro,registros FROM execucoes ORDER BY id`)
+	linhas, err := c.DB.Query(`SELECT id,modulo,titulo,versao,ferramenta_sha256,args,estado,inicio,COALESCE(fim,''),erro,registros FROM execucoes WHERE estado!='substituida' ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -278,4 +278,62 @@ func (c *Caso) Execucoes() ([]Execucao, error) {
 		todas = append(todas, x)
 	}
 	return todas, linhas.Err()
+}
+
+// SubstituirLeituras tira os resultados de leituras anteriores do mesmo modulo sobre as
+// mesmas evidencias, depois que uma nova terminou inteira: sem isso, cada atualizacao do
+// programa dobraria os registros do caso. Registros marcados por quem examina ficam, porque
+// a marcacao e uma decisao de pessoa. A saida bruta continua na pasta de cada execucao.
+func (c *Caso) SubstituirLeituras(alvo string, nova int64) ([]int64, int64, error) {
+	tx, err := c.DB.Begin()
+	if err != nil {
+		return nil, 0, err
+	}
+	defer tx.Rollback()
+	linhas, err := tx.Query(`SELECT id FROM execucoes WHERE alvo=? AND id!=? AND estado='concluida'`, alvo, nova)
+	if err != nil {
+		return nil, 0, err
+	}
+	var antigas []int64
+	for linhas.Next() {
+		var id int64
+		if err := linhas.Scan(&id); err != nil {
+			linhas.Close()
+			return nil, 0, err
+		}
+		antigas = append(antigas, id)
+	}
+	if err := linhas.Close(); err != nil {
+		return nil, 0, err
+	}
+	var removidos int64
+	const selecao = `SELECT id FROM registros WHERE execucao_id=? AND id NOT IN (SELECT registro_id FROM marcacoes)`
+	for _, id := range antigas {
+		for _, comando := range []string{
+			`DELETE FROM registro_entidade WHERE registro_id IN (` + selecao + `)`,
+			`DELETE FROM busca WHERE rowid IN (` + selecao + `)`,
+		} {
+			if _, err := tx.Exec(comando, id); err != nil {
+				return nil, 0, err
+			}
+		}
+		res, err := tx.Exec(`DELETE FROM registros WHERE id IN (`+selecao+`)`, id)
+		if err != nil {
+			return nil, 0, err
+		}
+		n, err := res.RowsAffected()
+		if err != nil {
+			return nil, 0, err
+		}
+		removidos += n
+		if _, err := tx.Exec(`UPDATE execucoes SET estado='substituida' WHERE id=?`, id); err != nil {
+			return nil, 0, err
+		}
+	}
+	if len(antigas) > 0 {
+		if _, err := tx.Exec(`DELETE FROM entidades WHERE id NOT IN (SELECT entidade_id FROM registro_entidade)`); err != nil {
+			return nil, 0, err
+		}
+	}
+	return antigas, removidos, tx.Commit()
 }

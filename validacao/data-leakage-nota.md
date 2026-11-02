@@ -106,17 +106,17 @@ neste caso.
 
 **Esta rodada não é às cegas.** As correções foram feitas depois de ver o gabarito, então ela mede se as lacunas fecharam, não a capacidade em um caso novo. A nota às cegas continua sendo a de cima: 20 de 57. O próximo teste que vale como independente precisa de outro caso.
 
-O caso foi processado do zero, sem a linha do tempo completa: 188 leituras, nenhuma falha, cerca de 54 minutos (34 da análise e 19 do exame profundo) e 20 GB.
+O caso foi processado do zero, sem a linha do tempo completa, nenhuma leitura falhou e a análise levou 30 minutos, mais 17 do exame profundo, e ocupou 20 GB. Esses tempos são da rodada sem as cópias de sombra, que levam segundos e foram lidas em uma etapa seguinte no mesmo caso. Refazer leituras nesse caso, para conferir as últimas correções, levou 43 minutos e subiu o espaço para 32 GB, porque a saída bruta de cada leitura substituída fica guardada.
 
 | Situação | Perguntas | De 57 |
 | --- | --- | --- |
-| Dado na tela confere com o gabarito | 49 | 86% |
-| Parcial | 5 | 9% |
-| Sem resposta | 3 | 5% |
+| Dado na tela confere com o gabarito | 52 | 91% |
+| Parcial | 4 | 7% |
+| Sem resposta | 1 | 2% |
 
 Três ajustes de texto vieram depois deste processamento e só foram conferidos à parte: tamanho das partições em GiB, pasta e corpo completo dos e-mails, e quebras de linha no resumo da busca do Windows.
 
-A conferência foi feita pelo banco do caso, comparando cada resposta com o gabarito, com busca e abertura do caso conferidas no navegador. As 49 ainda pedem interpretação de quem examina, como a 34, respondida pela imagem do CD-R embora o gabarito peça só o PC, e a 52, em que o alvo do Eraser sai dos nomes no diário do NTFS.
+A conferência foi feita pelo banco do caso, comparando cada resposta com o gabarito, com busca e abertura do caso conferidas no navegador. As 52 ainda pedem interpretação de quem examina, como a 34, respondida pela imagem do CD-R embora o gabarito peça só o PC, e a 52, em que o alvo do Eraser sai dos nomes no diário do NTFS.
 
 **Continuam parciais:**
 
@@ -124,12 +124,10 @@ A conferência foi feita pelo banco do caso, comparando cada resposta com o gaba
 - 9: falta o nome da placa de rede.
 - 33: os quatro eventos de gravação conferem, mas a gravação como pendrive, das 16:53 às 16:58 locais, não tem data.
 - 36: faltam as datas internas do documento.
-- 47: as cópias de sombra aparecem como arquivos, sem os metadados de cada cópia.
 
 **Continuam sem resposta:**
 
 - 39: as miniaturas não são extraídas.
-- 48 e 49: o conteúdo das cópias de sombra não é montado, o que depende de uma ferramenta ainda não liberada.
 
 **O que mudou:**
 
@@ -138,4 +136,6 @@ A conferência foi feita pelo banco do caso, comparando cada resposta com o gaba
 - CD-R em UDF: entradas de diretório, inclusive as apagadas, e os 17 documentos recuperados por assinatura, com os tamanhos do gabarito. Dez trazem o nome original nas propriedades do próprio arquivo. Os sete em formatos antigos do Office trazem só o tipo e trechos de texto, então o nome ainda depende de quem examina.
 - RM#2: os 17 arquivos apagados foram lidos com o tamanho exato do gabarito.
 - Hash com SHA-1, nome da imagem e comparação com o hash gravado no E01. Os quatro conferem. Partições com tamanho.
+- Cópias de sombra (47 a 49): data de criação e identificadores conferem, os arquivos que só existem na cópia aparecem, e os dois registros apagados de `cloud_entry` saem com nome, datas, tamanho e hash iguais aos do gabarito. A comparação com o disco atual deixa de fora as pastas do sistema.
 - Corrigido um erro encontrado no caminho: em um caso com várias imagens, abrir um arquivo lia sempre a primeira imagem.
+- Corrigido outro: refazer uma leitura, o que acontece ao atualizar o programa, dobrava os registros do caso. Agora a leitura nova substitui a anterior, e os achados marcados ficam.

@@ -501,7 +501,8 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 		shaFerramenta += " " + versao
 	}
 	dirRegras := filepath.Join(filepath.Dir(m.DirFerramentas), "regras")
-	if slices.ContainsFunc(comando.Args, func(a string) bool { return strings.Contains(a, "{regras}") }) {
+	usaRegras := func(a string) bool { return strings.Contains(a, "{regras") }
+	if slices.ContainsFunc(comando.Args, usaRegras) || (comando.Depois != nil && slices.ContainsFunc(comando.Depois.Args, usaRegras)) {
 		// Regra diferente e analise diferente: entra na identidade da tarefa e na custodia.
 		sha, err := hashPasta(filepath.Join(dirRegras, md.Nome))
 		if err != nil {
@@ -533,8 +534,8 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	}
 
 	inicio := time.Now().UTC().Format(time.RFC3339)
-	res, err := c.DB.Exec(`INSERT INTO execucoes(chave,modulo,titulo,versao,ferramenta_sha256,args,estado,inicio) VALUES(?,?,?,?,?,?,?,?)`,
-		chave, md.Nome, md.Titulo, versao, shaFerramenta, "[]", "rodando", inicio)
+	res, err := c.DB.Exec(`INSERT INTO execucoes(chave,modulo,titulo,versao,ferramenta_sha256,args,estado,inicio,alvo) VALUES(?,?,?,?,?,?,?,?,?)`,
+		chave, md.Nome, md.Titulo, versao, shaFerramenta, "[]", "rodando", inicio, alvoTarefa(md, t.Entradas))
 	if err != nil {
 		return false, err
 	}
@@ -625,10 +626,25 @@ func (m *Motor) Executar(ctx context.Context, c *caso.Caso, t Tarefa) (reutiliza
 	for _, e := range t.Entradas {
 		shas = append(shas, e.SHA256)
 	}
-	_, err = c.Custodia.Registrar("modulo.executado", map[string]any{
+	if _, err = c.Custodia.Registrar("modulo.executado", map[string]any{
 		"execucao": id, "modulo": md.Nome, "versao": versao, "ferramenta_sha256": shaFerramenta,
 		"args": args, "entradas": shas, "registros": n, "parcial": parcial,
-	})
+	}); err != nil {
+		return false, err
+	}
+	// Uma leitura parcial nao substitui nada: a anterior pode ter lido mais.
+	if parcial != "" {
+		return false, nil
+	}
+	antigas, removidos, err := c.SubstituirLeituras(alvoTarefa(md, t.Entradas), id)
+	if err != nil {
+		return false, err
+	}
+	if len(antigas) > 0 {
+		_, err = c.Custodia.Registrar("modulo.substituido", map[string]any{
+			"execucao": id, "modulo": md.Nome, "anteriores": antigas, "registros_removidos": removidos,
+		})
+	}
 	return false, err
 }
 
@@ -814,6 +830,19 @@ func expandirArgs(modelo []string, valores map[string]string) []string {
 		args[i] = a
 	}
 	return args
+}
+
+// alvoTarefa identifica o modulo e as evidencias, sem a versao: duas leituras com o mesmo
+// alvo respondem a mesma pergunta, e a mais nova substitui a anterior.
+func alvoTarefa(md *modulo.Manifesto, entradas []caso.Evidencia) string {
+	shas := make([]string, 0, len(entradas))
+	for _, e := range entradas {
+		shas = append(shas, e.SHA256)
+	}
+	sort.Strings(shas)
+	h := sha256.New()
+	json.NewEncoder(h).Encode([]any{md.Nome, shas})
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 func chaveTarefa(md *modulo.Manifesto, shaFerramenta string, cmd modulo.Comando, entradas []caso.Evidencia) string {

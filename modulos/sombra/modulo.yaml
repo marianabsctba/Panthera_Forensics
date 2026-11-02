@@ -1,0 +1,24 @@
+contrato: 1
+nome: sombra
+titulo: Leitura de cópias de sombra
+versao: "wsl"
+requer_wsl: true
+opcional: true
+reconhece:
+  - tipo: disco
+    magica_hex: "455646090d0aff00"
+    extensoes: [.dd, .e01, .001, .002, .003, .004, .005, .006, .007, .008, .009, .010, .011, .012]
+consome: [disco]
+modo: imagem
+comando:
+  windows:
+    exec: wsl.exe
+    sistema: true
+    verificar: [-d, panthera-forense, -u, root, -e, python3, -c, "import pyewf, pytsk3, pyvshadow"]
+    versao: [-d, panthera-forense, -u, root, -e, python3, -c, "import pyvshadow; print('version', pyvshadow.get_version())"]
+    # Sem shell: o nome de uma evidencia nao e confiavel.
+    args: [-d, panthera-forense, -u, root, -e, python3, "{regras_wsl}/sombra/sombra.py", "{saida_wsl}", "{entrada_wsl}", "{entrada}"]
+saida:
+  arquivos: registros.jsonl
+  formato: contrato
+  derivados: derivados.jsonl
